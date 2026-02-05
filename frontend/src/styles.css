@@ -1,0 +1,117 @@
+:root {
+  --bg: #0e1422;
+  --card: #151c2c;
+  --text: #e6edf3;
+  --muted: #a9b1bb;
+  --primary: #3dd179;
+  --border: #243049;
+}
+
+html, body, #root { height: 100%; overflow: hidden; }
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: linear-gradient(135deg, #0a0e1a 0%, #1a1f3a 50%, #0d1117 100%);
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  position: relative;
+}
+
+/* Space stars background */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1px 1px at 40px 70px, rgba(255,255,255,0.1), transparent),
+    radial-gradient(1px 1px at 50px 160px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1px 1px at 90px 40px, rgba(255,255,255,0.1), transparent),
+    radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.12), transparent),
+    radial-gradient(1px 1px at 160px 120px, rgba(255,255,255,0.08), transparent),
+    radial-gradient(1px 1px at 200px 50px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1px 1px at 230px 180px, rgba(255,255,255,0.1), transparent),
+    radial-gradient(1px 1px at 280px 90px, rgba(255,255,255,0.12), transparent),
+    radial-gradient(1px 1px at 320px 140px, rgba(255,255,255,0.08), transparent),
+    radial-gradient(1px 1px at 360px 60px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1px 1px at 400px 200px, rgba(255,255,255,0.1), transparent),
+    radial-gradient(1px 1px at 450px 100px, rgba(255,255,255,0.12), transparent),
+    radial-gradient(1px 1px at 500px 160px, rgba(255,255,255,0.08), transparent),
+    radial-gradient(1px 1px at 550px 40px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1px 1px at 600px 120px, rgba(255,255,255,0.1), transparent),
+    radial-gradient(1px 1px at 650px 80px, rgba(255,255,255,0.12), transparent),
+    radial-gradient(1px 1px at 700px 180px, rgba(255,255,255,0.08), transparent),
+    radial-gradient(1px 1px at 750px 50px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1px 1px at 800px 140px, rgba(255,255,255,0.1), transparent),
+    radial-gradient(1px 1px at 850px 90px, rgba(255,255,255,0.12), transparent),
+    radial-gradient(1px 1px at 900px 170px, rgba(255,255,255,0.08), transparent),
+    radial-gradient(1px 1px at 950px 30px, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1px 1px at 1000px 110px, rgba(255,255,255,0.1), transparent);
+  background-repeat: repeat;
+  background-size: 1000px 250px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.container { max-width: 1400px; margin: 48px auto; padding: 0 20px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; box-shadow: 0 12px 24px rgba(0,0,0,.18); overflow: hidden; }
+.title { font-size: 28px; margin: 0 0 16px; text-align: center; }
+.btn { background: var(--primary); color: #092013; border: none; padding: 10px 14px; border-radius: 10px; cursor: pointer; transition: filter .2s ease, transform .02s ease; }
+.btn:hover { filter: brightness(1.05); }
+.btn:active { transform: translateY(1px); }
+.btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.input, .textarea, .select { width: 100%; max-width: 100%; background: #111a2b; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: block; }
+
+/* CodeMirror styling to match site theme */
+.cm-editor { background: #111a2b !important; border: 1px solid #243049 !important; border-radius: 10px !important; }
+.cm-focused { outline: none !important; }
+.textarea { min-height: 120px; resize: vertical; }
+.row { display: flex; gap: 12px; align-items: center; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; justify-content: center; }
+.tab { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: #101a2a; color: var(--text); }
+.tab.ok { background: rgba(61, 209, 121, .25); }
+.tab.fail { background: rgba(169, 177, 187, .18); }
+
+/* Forms */
+label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 14px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; width: 100%; }
+.full-row { grid-column: 1 / -1; }
+.form-row { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: start; width: 100%; }
+.form-row > label { margin: 0; text-align: left; padding-top: 0; }
+
+@media (min-width: 1200px) {
+  /* На очень широких экранах можно вернуть 2 колонки для метки и поля */
+  .form-row.wide { grid-template-columns: minmax(140px, 220px) 1fr; gap: 12px; }
+  .form-row.wide > label { padding-top: 10px; text-align: right; }
+}
+
+/* Custom scrollbar styling to match site theme - hidden */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+::-webkit-scrollbar-track {
+  background: #111a2b;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #243049;
+  border-radius: 5px;
+  border: 2px solid #111a2b;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3dd179;
+}
+
+/* Firefox scrollbar - hidden */
+* {
+  scrollbar-width: none;
+}
+
