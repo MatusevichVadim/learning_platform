@@ -1,6 +1,23 @@
 @echo off
 echo Starting backend and frontend...
 
+REM Check for updates from GitHub
+echo Checking for updates from GitHub...
+git fetch origin
+
+REM Get current branch name
+for /f %%i in ('git rev-parse --abbrev-ref HEAD') do set branch=%%i
+
+REM Check if there are remote changes
+git status origin/%branch% >nul 2>&1
+if %errorlevel% equ 0 (
+    echo Found updates, pulling latest changes...
+    git pull origin %branch%
+    echo.
+    echo Updates downloaded! Please restart the application.
+    echo.
+)
+
 REM Install backend dependencies if needed
 echo Installing backend dependencies...
 uv pip install -r backend/requirements.txt --system
