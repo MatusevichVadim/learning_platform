@@ -331,6 +331,18 @@ def update_lesson_additional_info(lesson_id: int, data: dict, _: dict = Depends(
     db.flush()
     return {"status": "updated"}
 
+@router.put("/lessons/{lesson_id}")
+def update_lesson(lesson_id: int, data: dict, _: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    lesson = db.get(Lesson, lesson_id)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    
+    if "title" in data:
+        lesson.title = str(data["title"]).strip()
+    
+    db.flush()
+    return {"id": lesson.id, "title": lesson.title}
+
 @router.delete("/lessons/{lesson_id}")
 def delete_lesson(lesson_id: int, _: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     lesson = db.get(Lesson, lesson_id)

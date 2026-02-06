@@ -14,6 +14,8 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null)
   const [taskCounts, setTaskCounts] = useState<Record<number, number>>({})
   const [editingLessonId, setEditingLessonId] = useState<number | null>(null)
+  const [editingLessonTitle, setEditingLessonTitle] = useState<string>('')
+  const [editingAdditionalInfoLessonId, setEditingAdditionalInfoLessonId] = useState<number | null>(null)
   const [additionalInfo, setAdditionalInfo] = useState('')
   const [showAdditionalInfoPreview, setShowAdditionalInfoPreview] = useState(false)
   const [showMarkdownHelp, setShowMarkdownHelp] = useState(false)
@@ -63,31 +65,53 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
     }
   }
 
+  async function startEditTitle(lesson: { id: number; title: string }) {
+    setEditingLessonId(lesson.id)
+    setEditingLessonTitle(lesson.title)
+  }
+
+  async function saveTitle(lessonId: number) {
+    try {
+      await axios.put(`/api/admin/lessons/${lessonId}`, { title: editingLessonTitle }, { headers: adminHeaders() })
+      setEditingLessonId(null)
+      setEditingLessonTitle('')
+      await refresh()
+    } catch (error) {
+      console.error('Failed to update lesson title:', error)
+      alert('Ошибка при сохранении названия')
+    }
+  }
+
+  function cancelTitleEdit() {
+    setEditingLessonId(null)
+    setEditingLessonTitle('')
+  }
+
   async function startEditAdditionalInfo(lessonId: number) {
     try {
       const response = await axios.get(`/api/admin/lessons/${lessonId}/additional-info`, {
         headers: adminHeaders()
       })
       setAdditionalInfo(response.data.additional_info || '')
-      setEditingLessonId(lessonId)
+      setEditingAdditionalInfoLessonId(lessonId)
     } catch (error) {
       console.error('Failed to fetch additional info:', error)
       setAdditionalInfo('')
-      setEditingLessonId(lessonId)
+      setEditingAdditionalInfoLessonId(lessonId)
     }
   }
 
   async function saveAdditionalInfo() {
-    if (editingLessonId === null) return
+    if (editingAdditionalInfoLessonId === null) return
 
     try {
-      await axios.put(`/api/admin/lessons/${editingLessonId}/additional-info`, {
+      await axios.put(`/api/admin/lessons/${editingAdditionalInfoLessonId}/additional-info`, {
         additional_info: additionalInfo
       }, {
         headers: adminHeaders()
       })
       // Success - no alert needed
-      setEditingLessonId(null)
+      setEditingAdditionalInfoLessonId(null)
       setAdditionalInfo('')
     } catch (error) {
       console.error('Failed to save additional info:', error)
@@ -96,7 +120,7 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
   }
 
   function cancelEdit() {
-    setEditingLessonId(null)
+    setEditingAdditionalInfoLessonId(null)
     setAdditionalInfo('')
   }
 
@@ -281,7 +305,42 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
                 color: '#ffffff',
                 fontSize: '14px'
               }}>
-                {l.title}
+                {editingLessonId === l.id ? (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      className="input"
+                      value={editingLessonTitle}
+                      onChange={(e) => setEditingLessonTitle(e.target.value)}
+                      style={{ padding: '4px 8px', fontSize: '14px' }}
+                    />
+                    <button
+                      className="btn small"
+                      onClick={() => saveTitle(l.id)}
+                      style={{ backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      ✓
+                    </button>
+                    <button
+                      className="btn small"
+                      onClick={cancelTitleEdit}
+                      style={{ backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>{l.title}</span>
+                    <button
+                      className="btn small"
+                      onClick={() => startEditTitle(l)}
+                      style={{ backgroundColor: '#ffc107', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 8px', fontSize: '12px', cursor: 'pointer' }}
+                      title="Изменить название"
+                    >
+                      ✏️
+                    </button>
+                  </div>
+                )}
               </td>
               <td style={{
                 padding: '12px 16px'
@@ -317,8 +376,9 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
                     fontSize: '12px',
                     cursor: 'pointer'
                   }}
+                  title="Дополнительная информация"
                 >
-                  ✏️
+                  📝
                 </button>
               </td>
               <td style={{
@@ -347,7 +407,7 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
         </table>
 
       {/* Additional Information Editor */}
-      {editingLessonId && (
+      {editingAdditionalInfoLessonId && (
         <div style={{ marginTop: '20px', padding: '16px', border: '1px solid #243049', borderRadius: '8px', backgroundColor: '#111a2b', width: '80vw', maxWidth: '1200px', marginLeft: 'auto', marginRight: 'auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h4 style={{ margin: 0 }}>Редактирование дополнительной информации</h4>
