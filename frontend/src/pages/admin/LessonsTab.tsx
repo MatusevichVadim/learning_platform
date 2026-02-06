@@ -87,6 +87,15 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
     setEditingLessonTitle('')
   }
 
+  async function moveLesson(lessonId: number, direction: 'up' | 'down') {
+    try {
+      await axios.post(`/api/admin/lessons/${lessonId}/move`, { direction }, { headers: adminHeaders() })
+      await refresh()
+    } catch (error) {
+      console.error('Failed to move lesson:', error)
+    }
+  }
+
   async function startEditAdditionalInfo(lessonId: number) {
     try {
       const response = await axios.get(`/api/admin/lessons/${lessonId}/additional-info`, {
@@ -384,22 +393,56 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
               <td style={{
                 padding: '12px 16px'
               }}>
-                <button
-                  className="btn small"
-                  onClick={() => remove(l.id)}
-                  style={{
-                    backgroundColor: '#dc3545',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    cursor: 'pointer'
-                  }}
-                  title="Удалить урок"
-                >
-                  🗑️
-                </button>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button
+                    className="btn small"
+                    onClick={() => moveLesson(l.id, 'up')}
+                    style={{
+                      backgroundColor: '#6c757d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                    title="Переместить вверх"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="btn small"
+                    onClick={() => moveLesson(l.id, 'down')}
+                    style={{
+                      backgroundColor: '#6c757d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                    title="Переместить вниз"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    className="btn small"
+                    onClick={() => remove(l.id)}
+                    style={{
+                      backgroundColor: '#dc3545',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                    title="Удалить урок"
+                  >
+                    🗑️
+                  </button>
+                </div>
               </td>
             </tr>
             ))}

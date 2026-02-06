@@ -343,6 +343,41 @@ def update_lesson(lesson_id: int, data: dict, _: dict = Depends(get_current_admi
     db.flush()
     return {"id": lesson.id, "title": lesson.title}
 
+@router.post("/lessons/{lesson_id}/move")
+def move_lesson(lesson_id: int, data: dict, _: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    lesson = db.get(Lesson, lesson_id)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    
+    direction = data.get("direction")  # "up" or "down"
+    if direction not in ["up", "down"]:
+        raise HTTPException(status_code=400, detail="Direction must be 'up' or 'down'")
+    
+    # Find adjacent lesson with same language
+    if direction == "up":
+        adjacent = db.execute(
+            select(Lesson)
+            .where(Lesson.language == lesson.language)
+            .where(Lesson.order_index < lesson.order_index)
+            .order_by(Lesson.order_index.desc())
+        ).scalars().first()
+    else:
+        adjacent = db.execute(
+            select(Lesson)
+            .where(Lesson.language == lesson.language)
+            .where(Lesson.order_index > lesson.order_index)
+            .order_by(Lesson.order_index.asc())
+        ).scalars().first()
+    
+    if adjacent:
+        # Swap order_index values
+        temp = lesson.order_index
+        lesson.order_index = adjacent.order_index
+        adjacent.order_index = temp
+        db.flush()
+    
+    return {"status": "moved", "direction": direction}
+
 @router.delete("/lessons/{lesson_id}")
 def delete_lesson(lesson_id: int, _: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     lesson = db.get(Lesson, lesson_id)
