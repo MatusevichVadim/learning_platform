@@ -26,6 +26,11 @@ export async function listLessons(language: string) {
   return res.data as Array<{ id: number; title: string; order_index: number }>
 }
 
+export async function getLesson(lessonId: number) {
+  const res = await api.get(`/lessons/${lessonId}`)
+  return res.data as { id: number; title: string; order_index: number }
+}
+
 export async function listTasks(lessonId: number) {
   const res = await api.get(`/lessons/${lessonId}/tasks`)
   return res.data as Array<{ id: number; title: string; description: string; kind: string }>

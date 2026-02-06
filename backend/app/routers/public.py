@@ -73,6 +73,14 @@ def list_tasks(lesson_id: int, page: int = 1, page_size: int = 50, db: Session =
     return db.execute(stmt).scalars().all()
 
 
+@router.get("/lessons/{lesson_id}", response_model=LessonOut)
+def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
+    lesson = db.get(Lesson, lesson_id)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    return lesson
+
+
 @router.get("/lessons/{lesson_id}/status")
 def lesson_status(lesson_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     tasks = db.execute(select(Task).where(Task.lesson_id == lesson_id).order_by(Task.id)).scalars().all()

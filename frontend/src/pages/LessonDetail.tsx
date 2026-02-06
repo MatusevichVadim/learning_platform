@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { listTasks, submitQuiz, submitCode, lessonStatus, getTaskSubmission } from '../api'
+import { listTasks, submitQuiz, submitCode, lessonStatus, getTaskSubmission, getLesson } from '../api'
 import { t } from '../i18n'
 import CodeInterpreter from '../components/CodeInterpreter'
 import ReactMarkdown from 'react-markdown'
 
 type Task = { id: number; title: string; description: string; kind: string; test_spec?: string }
+
+type LessonInfo = { id: number; title: string; order_index: number }
 
 type SubmissionDetails = {
   id: number
@@ -37,6 +39,9 @@ export default function LessonDetail() {
   // State for additional information modal
   const [showInfoModal, setShowInfoModal] = useState(false)
   const [additionalInfo, setAdditionalInfo] = useState('')
+
+  // State for lesson info
+  const [lessonInfo, setLessonInfo] = useState<LessonInfo | null>(null)
 
 
   // Function to fetch submission details for all tasks
@@ -80,6 +85,9 @@ export default function LessonDetail() {
   useEffect(() => {
     const id = Number(lessonId)
     if (id) {
+      // Fetch lesson info
+      getLesson(id).then(setLessonInfo)
+
       listTasks(id).then(async (taskList) => {
         setTasks(taskList)
         await fetchSubmissionDetails(taskList)
@@ -247,7 +255,7 @@ export default function LessonDetail() {
         </button>
       </div>
       <div className="card">
-        <h1 className="title">{t('tasks')}</h1>
+        <h1 className="title">{lessonInfo?.title || 'Название урока'}</h1>
         <div className="tabs">
           {tasks.map((task, idx) => {
             const st = status[task.id]
