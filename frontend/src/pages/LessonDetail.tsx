@@ -156,7 +156,7 @@ export default function LessonDetail() {
     return () => clearInterval(pollInterval)
   }, [hasPendingSubmissions, tasks, submissionDetails, lessonId])
 
-  async function onSubmit(task: Task) {
+  async function onSubmit(task: Task, quizAnswer?: string) {
     // Shuffle options on submit only if answer is not correct
     const id = Number(lessonId)
     if (task.kind === 'quiz' && task.test_spec && id) {
@@ -167,11 +167,14 @@ export default function LessonDetail() {
           const opts: string[] = spec.options || []
           const shuffledIndices = opts.map((_, i) => i).sort(() => Math.random() - 0.5)
           const shuffled = shuffledIndices.map(i => opts[i])
-          setShuffledOpts(s => ({ ...s, [task.id]: shuffled }))
+          // Add 0.6 second delay before shuffling options
+          setTimeout(() => {
+            setShuffledOpts(prev => ({ ...prev, [task.id]: shuffled }))
+          }, 600)
         }
       } catch {}
     }
-    const value = answers[task.id] || ''
+    const value = quizAnswer !== undefined ? quizAnswer : (answers[task.id] || '')
     if (task.kind === 'quiz') {
       await submitQuiz(task.id, value)
       setDetailedResults(prev => ({ ...prev, [task.id]: undefined })) // clear previous
@@ -301,34 +304,76 @@ export default function LessonDetail() {
               const correctLetters: string[] = Array.isArray(spec.correct) ? spec.correct : (spec.correct ? [spec.correct] : [])
               const displayOpts = shuffledOpts[task.id] || opts
               const shuffledIndices = displayOpts.map(opt => opts.indexOf(opt))
+              const isCorrect = status[task.id] === true
+              const isIncorrect = status[task.id] === false
+              const maxAttempts = 3
+              const attempts = quizAttempts[task.id] || 0
+              const isDisabled = attempts >= maxAttempts && !isCorrect
+              
               return (
-                <div style={{ display: 'flex', gap: 8, flexDirection: 'column', marginBottom: 8 }}>
+                <div style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'repeat(2, 1fr)', 
+                  gap: '16px',
+                  marginBottom: 8 
+                }}>
                   {displayOpts.map((opt, displayIdx) => {
                     const originalIdx = shuffledIndices[displayIdx]
                     const letter = String.fromCharCode(65 + originalIdx)
-                    const isChecked = status[task.id] === true ? correctLetters.includes(letter) : (answers[task.id] || '').includes(letter)
+                    const isSelected = isCorrect ? correctLetters.includes(letter) : (answers[task.id] || '').includes(letter)
+                    
                     return (
-                      <label key={displayIdx}>
-                        <input
-                          type="checkbox"
-                          name={`q_${task.id}_${displayIdx}`}
-                          checked={isChecked}
-                          disabled={status[task.id] === true || (quizAttempts[task.id] || 0) >= 3}
-                          onChange={() => {
-                            if (status[task.id] !== true && (quizAttempts[task.id] || 0) < 3) { // only allow change if not correct and attempts left
-                              setAnswers(a => {
-                                const current = a[task.id] || ''
-                                const chars = current.split('')
-                                if (chars.includes(letter)) {
-                                  return { ...a, [task.id]: chars.filter(c => c !== letter).join('') }
-                                } else {
-                                  return { ...a, [task.id]: current + letter }
-                                }
-                              })
-                            }
-                          }}
-                        /> {opt}
-                      </label>
+                      <button
+                        key={displayIdx}
+                        onClick={() => {
+                          if (!isCorrect && !isDisabled) {
+                            setAnswers(a => ({ ...a, [task.id]: letter }))
+                            onSubmit(task, letter)
+                          }
+                        }}
+                        disabled={isCorrect || isDisabled}
+                        style={{
+                          backgroundColor: isCorrect 
+                            ? (correctLetters.includes(letter) ? 'rgba(61, 209, 121, 0.15)' : 'rgba(61, 209, 121, 0.05)')
+                            : isDisabled 
+                            ? '#1a1a2e' 
+                            : '#1a1a2e',
+                          border: isCorrect 
+                            ? (correctLetters.includes(letter) ? '2px solid #3dd179' : '1px solid #243049')
+                            : isSelected 
+                            ? '2px solid #3dd179' 
+                            : '1px solid #243049',
+                          borderRadius: '12px',
+                          padding: '20px 24px',
+                          cursor: isCorrect || isDisabled ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s ease',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center',
+                          fontSize: '18px',
+                          color: '#e6edf3',
+                          minHeight: '70px',
+                          fontWeight: '500',
+                          lineHeight: '1.3'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isCorrect && !isDisabled) {
+                            e.currentTarget.style.transform = 'translateY(-3px)'
+                            e.currentTarget.style.borderColor = '#3dd179'
+                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(61, 209, 121, 0.15)'
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isCorrect && !isDisabled) {
+                            e.currentTarget.style.transform = 'translateY(0)'
+                            e.currentTarget.style.borderColor = isSelected ? '#3dd179' : '#243049'
+                            e.currentTarget.style.boxShadow = 'none'
+                          }
+                        }}
+                      >
+                        {opt}
+                      </button>
                     )
                   })}
                 </div>
@@ -342,7 +387,9 @@ export default function LessonDetail() {
             />
           )}
           <div className="row" style={{ marginTop: 8, justifyContent: 'space-between' }}>
-            <button className="btn" onClick={() => onSubmit(task)} disabled={task.kind === 'quiz' && (quizAttempts[task.id] || 0) >= 3 && status[task.id] !== true}>{t('submit')}</button>
+            {task.kind === 'code' && (
+              <button className="btn" onClick={() => onSubmit(task)}>{t('submit')}</button>
+            )}
             {status[task.id] !== undefined && status[task.id] !== null && (
               <span style={{ color: status[task.id] ? '#3dd179' : '#a9b1bb' }}>
                 {status[task.id] ? 'Верно' : 'Неверно'}
