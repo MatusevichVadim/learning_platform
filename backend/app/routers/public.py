@@ -69,7 +69,7 @@ def list_lessons(language: str, page: int = 1, page_size: int = 50, db: Session 
 @router.get("/lessons/{lesson_id}/tasks", response_model=list[TaskOut])
 def list_tasks(lesson_id: int, page: int = 1, page_size: int = 50, db: Session = Depends(get_db)):
     offset = (page - 1) * page_size
-    stmt = select(Task).where(Task.lesson_id == lesson_id).order_by(Task.id).offset(offset).limit(page_size)
+    stmt = select(Task).where(Task.lesson_id == lesson_id).order_by(Task.order_index).offset(offset).limit(page_size)
     return db.execute(stmt).scalars().all()
 
 
@@ -83,7 +83,7 @@ def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
 
 @router.get("/lessons/{lesson_id}/status")
 def lesson_status(lesson_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    tasks = db.execute(select(Task).where(Task.lesson_id == lesson_id).order_by(Task.id)).scalars().all()
+    tasks = db.execute(select(Task).where(Task.lesson_id == lesson_id).order_by(Task.order_index)).scalars().all()
     task_ids = [t.id for t in tasks]
     if not task_ids:
         return {}

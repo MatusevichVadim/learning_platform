@@ -53,6 +53,7 @@ class Task(Base):
     description: Mapped[str] = mapped_column(Text)
     kind: Mapped[str] = mapped_column(String(20))  # "quiz" | "code"
     test_spec: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string or plain
+    order_index: Mapped[int] = mapped_column(Integer, default=0)  # For ordering tasks within a lesson
 
     lesson: Mapped[Lesson] = relationship("Lesson", back_populates="tasks")
     submissions: Mapped[list[Submission]] = relationship("Submission", back_populates="task")

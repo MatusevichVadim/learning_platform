@@ -96,6 +96,9 @@ label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 14px
 .form-row { display: grid; grid-template-columns: 1fr; gap: 6px; align-items: start; width: 100%; }
 .form-row > label { margin: 0; text-align: left; padding-top: 0; }
 
+/* Lessons tabs - override global center alignment */
+.form-row .tabs { justify-content: flex-start !important; }
+
 @media (min-width: 1200px) {
   /* На очень широких экранах можно вернуть 2 колонки для метки и поля */
   .form-row.wide { grid-template-columns: minmax(140px, 220px) 1fr; gap: 12px; }

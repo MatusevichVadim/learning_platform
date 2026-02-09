@@ -3,7 +3,7 @@ import axios from 'axios'
 import { adminHeaders } from '../../api'
 import ReactMarkdown from 'react-markdown'
 
-type Task = { id: number; lesson_id: number; title: string; description: string; kind: string; test_spec?: string }
+type Task = { id: number; lesson_id: number; title: string; description: string; kind: string; test_spec?: string; order_index?: number }
 type Lesson = { id: number; language: string; title: string; order_index: number }
 type Test = { input: string; output: string }
 
@@ -193,6 +193,19 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
     }
   }
 
+  async function moveTask(id: number, direction: 'left' | 'right') {
+    try {
+      // Map left/right to up/down for the API
+      const apiDirection = direction === 'left' ? 'up' : 'down'
+      await axios.post(`/api/admin/tasks/${id}/move`, { direction: apiDirection }, { headers: adminHeaders() })
+      await refresh()
+      if (selectedId) onSelect(selectedId)
+    } catch (error) {
+      console.error('Failed to move task:', error)
+      alert('Ошибка при перемещении задания')
+    }
+  }
+
   return (
     <div>
       {/* Markdown Help Modal */}
@@ -308,12 +321,33 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
         </div>
       )}
 
-      <div className="row" style={{ gap: 12, marginBottom: 12 }}>
-        <select className="select" value={filterLang} onChange={e => { const v = e.target.value; setFilterLang(v); localStorage.setItem('admin_lang', v); }}>
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', marginBottom: 8 }}>Выбрать язык</label>
+        <div className="tabs" style={{ justifyContent: 'flex-start', flexWrap: 'wrap' }}>
           {languages.map(lang => (
-            <option key={lang.id} value={lang.id}>{lang.name}</option>
+            <button
+              key={lang.id}
+              className="tab"
+              onClick={() => { 
+                const v = lang.id; 
+                setFilterLang(v); 
+                setSelectedLessonForFilter(null); 
+                setSelectedId(null);
+                setQuizOptions([]);
+                setCodeTests([{ input: '', output: '' }]);
+                setForm({ id: 0, lesson_id: 1, title: '', description: '', kind: 'quiz', test_spec: '' });
+                localStorage.setItem('admin_lang', v); 
+              }}
+              style={{
+                backgroundColor: filterLang === lang.id ? '#3dd179' : '#101a2a',
+                color: filterLang === lang.id ? '#092013' : '#e6edf3',
+                fontWeight: filterLang === lang.id ? 'bold' : 'normal'
+              }}
+            >
+              {lang.name}
+            </button>
           ))}
-        </select>
+        </div>
       </div>
       {showSuccess && (
         <div style={{ position: 'fixed', top: 10, right: 10, backgroundColor: '#4caf50', color: 'white', padding: '8px 16px', borderRadius: 4, zIndex: 1000 }}>
@@ -321,125 +355,290 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
         </div>
       )}
       {view === 'update' && (
-        <div className="form-grid" style={{ marginBottom: 12 }}>
-          <div className="form-row full-row">
-            <label>Выбрать урок</label>
-            <select className="select" value={selectedLessonForFilter || ''} onChange={e => { setSelectedLessonForFilter(Number(e.target.value) || null); setSelectedId(null); }}>
-              <option value="">— выберите урок —</option>
-              {lessons
-                .filter(l => filterLang ? l.language === filterLang : true)
-                .map(l => (
-                  <option key={l.id} value={l.id}>{l.title}</option>
-                ))}
-            </select>
-          </div>
-          <div className="form-row full-row">
-            <label>Выбрать задание</label>
-            <select className="select" value={selectedId || ''} onChange={e => onSelect(Number(e.target.value))} disabled={!selectedLessonForFilter}>
-              <option value="">— выберите задание —</option>
-              {tasks
-                .filter(t => !selectedLessonForFilter || t.lesson_id === selectedLessonForFilter)
-                .map(t => (
-                  <option key={t.id} value={t.id}>{t.title}</option>
-                ))}
-            </select>
-          </div>
+        <div style={{ marginBottom: 12 }}>
+          {filterLang && (
+            <>
+              <label style={{ display: 'block', marginBottom: 8 }}>Выбрать урок</label>
+              <div className="tabs" style={{ justifyContent: 'flex-start', flexWrap: 'wrap', marginBottom: 12 }}>
+                {lessons
+                  .filter(l => filterLang ? l.language === filterLang : true)
+                  .sort((a, b) => a.order_index - b.order_index)
+                  .map(l => (
+                    <button
+                      key={l.id}
+                      className="tab"
+                      onClick={() => { setSelectedLessonForFilter(l.id); setSelectedId(null); }}
+                      style={{
+                        backgroundColor: selectedLessonForFilter === l.id ? '#3dd179' : '#101a2a',
+                        color: selectedLessonForFilter === l.id ? '#092013' : '#e6edf3',
+                        fontWeight: selectedLessonForFilter === l.id ? 'bold' : 'normal'
+                      }}
+                    >
+                      {l.title}
+                    </button>
+                  ))}
+              </div>
+            </>
+          )}
+          {selectedLessonForFilter && (
+            <>
+              <label style={{ display: 'block', marginBottom: 8 }}>Выбрать задание</label>
+              <div className="tabs" style={{ justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+                {tasks
+                  .filter(t => !selectedLessonForFilter || t.lesson_id === selectedLessonForFilter)
+                  .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+                  .map((t, idx, arr) => (
+                    <div key={t.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
+                      <button
+                        className="tab"
+                        onClick={() => onSelect(t.id)}
+                        style={{
+                          backgroundColor: selectedId === t.id ? '#3dd179' : '#101a2a',
+                          color: selectedId === t.id ? '#092013' : '#e6edf3',
+                          fontWeight: selectedId === t.id ? 'bold' : 'normal'
+                        }}
+                      >
+                        {t.title}
+                      </button>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                        <button
+                          type="button"
+                          onClick={() => moveTask(t.id, 'left')}
+                          disabled={idx === 0}
+                          style={{
+                            background: '#1e2533',
+                            border: '1px solid #2d3748',
+                            borderRadius: '4px',
+                            color: idx === 0 ? '#444' : '#a9b1bb',
+                            cursor: idx === 0 ? 'not-allowed' : 'pointer',
+                            fontSize: '12px',
+                            padding: '4px 8px'
+                          }}
+                          title="Переместить влево"
+                        >
+                          ◄
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveTask(t.id, 'right')}
+                          disabled={idx === arr.length - 1}
+                          style={{
+                            background: '#1e2533',
+                            border: '1px solid #2d3748',
+                            borderRadius: '4px',
+                            color: idx === arr.length - 1 ? '#444' : '#a9b1bb',
+                            cursor: idx === arr.length - 1 ? 'not-allowed' : 'pointer',
+                            fontSize: '12px',
+                            padding: '4px 8px'
+                          }}
+                          title="Переместить вправо"
+                        >
+                          ►
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
       <div className="form-grid">
         {view === 'add' && (
-          <div className="form-row full-row">
-            <label>К какому уроку</label>
-            <select className="select" value={selectedLessonId || ''} onChange={e => { const id = Number(e.target.value); setSelectedLessonId(id); localStorage.setItem('last_selected_lesson_id', id.toString()); }} disabled={!filterLang}>
-              {lessons
-                .filter(l => filterLang ? l.language === filterLang : true)
-                .map(l => (
-                  <option key={l.id} value={l.id}>{l.title}</option>
-                ))}
-            </select>
-          </div>
+          <>
+            {filterLang && (
+              <div className="form-row" style={{ justifyContent: 'flex-start' }}>
+              <label style={{ display: 'block', marginBottom: 8 }}>К какому уроку</label>
+              <div className="tabs" style={{ justifyContent: 'flex-start', flexWrap: 'wrap', marginBottom: 12 }}>
+                {lessons
+                  .filter(l => filterLang ? l.language === filterLang : true)
+                  .sort((a, b) => a.order_index - b.order_index)
+                  .map(l => (
+                    <button
+                      key={l.id}
+                      className="tab"
+                      onClick={() => { setSelectedLessonId(l.id); localStorage.setItem('last_selected_lesson_id', l.id.toString()); }}
+                      style={{
+                        backgroundColor: selectedLessonId === l.id ? '#3dd179' : '#101a2a',
+                        color: selectedLessonId === l.id ? '#092013' : '#e6edf3',
+                        fontWeight: selectedLessonId === l.id ? 'bold' : 'normal'
+                      }}
+                    >
+                      {l.title}
+                    </button>
+                  ))}
+              </div>
+            </div>
+            )}
+          </>
         )}
-        <div className="form-row full-row">
-          <label>Тип</label>
-          <select className="select" value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}>
-            <option value="quiz">quiz</option>
-            <option value="code">code</option>
-          </select>
-        </div>
-        <div className="form-row full-row">
-          <label>Заголовок</label>
-          <input className="input" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
-        </div>
-        <div className="form-row full-row">
-          <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            Описание
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={() => setShowMarkdownHelp(true)}
-                style={{
-                  backgroundColor: '#6c757d',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  cursor: 'pointer'
-                }}
-                title="Показать справку по Markdown"
-              >
-                ❓ Markdown
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowDescriptionPreview(!showDescriptionPreview)}
-                style={{
-                  backgroundColor: '#17a2b8',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  cursor: 'pointer'
-                }}
-              >
-                {showDescriptionPreview ? '✏️ Редактировать' : '👁️ Preview'}
-              </button>
+        {view !== 'add' && selectedId ? (
+          <>
+            <div className="form-row full-row">
+              <label>Тип</label>
+              <select className="select" value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}>
+                <option value="quiz">quiz</option>
+                <option value="code">code</option>
+              </select>
             </div>
-          </label>
-          {showDescriptionPreview ? (
-            <div style={{
-              border: '1px solid #243049',
-              borderRadius: '6px',
-              padding: '12px',
-              backgroundColor: '#0d1117',
-              minHeight: '120px'
-            }}>
-              <ReactMarkdown
-                components={{
-                  h1: ({ children }) => <h1 style={{ color: '#58a6ff', marginTop: '0', marginBottom: '10px', fontSize: '1.3em' }}>{children}</h1>,
-                  h2: ({ children }) => <h2 style={{ color: '#58a6ff', marginTop: '16px', marginBottom: '8px', fontSize: '1.1em' }}>{children}</h2>,
-                  h3: ({ children }) => <h3 style={{ color: '#58a6ff', marginTop: '14px', marginBottom: '6px', fontSize: '1em' }}>{children}</h3>,
-                  p: ({ children }) => <p style={{ marginBottom: '8px' }}>{children}</p>,
-                  ul: ({ children }) => <ul style={{ marginLeft: '16px', marginBottom: '8px' }}>{children}</ul>,
-                  ol: ({ children }) => <ol style={{ marginLeft: '16px', marginBottom: '8px' }}>{children}</ol>,
-                  li: ({ children }) => <li style={{ marginBottom: '2px' }}>{children}</li>,
-                  code: ({ children }) => <code style={{ backgroundColor: '#161b22', padding: '2px 4px', borderRadius: '3px', fontFamily: 'monospace' }}>{children}</code>,
-                  pre: ({ children }) => <pre style={{ backgroundColor: '#161b22', padding: '8px', borderRadius: '4px', overflow: 'auto', marginBottom: '8px' }}>{children}</pre>,
-                  blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid #58a6ff', paddingLeft: '8px', marginBottom: '8px', color: '#a9b1bb' }}>{children}</blockquote>,
-                  strong: ({ children }) => <strong style={{ color: '#f85149' }}>{children}</strong>,
-                  em: ({ children }) => <em style={{ color: '#d29922' }}>{children}</em>,
-                }}
-              >
-                {form.description || '*Описание не добавлено*'}
-              </ReactMarkdown>
+            <div className="form-row full-row">
+              <label>Заголовок</label>
+              <input className="input" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
             </div>
-          ) : (
-            <textarea className="textarea" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          )}
-        </div>
-        {form.kind === 'quiz' ? (
+            <div className="form-row full-row">
+              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                Описание
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowMarkdownHelp(true)}
+                    style={{
+                      backgroundColor: '#6c757d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                    title="Показать справку по Markdown"
+                  >
+                    ❓ Markdown
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDescriptionPreview(!showDescriptionPreview)}
+                    style={{
+                      backgroundColor: '#17a2b8',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {showDescriptionPreview ? '✏️ Редактировать' : '👁️ Preview'}
+                  </button>
+                </div>
+              </label>
+              {showDescriptionPreview ? (
+                <div style={{
+                  border: '1px solid #243049',
+                  borderRadius: '6px',
+                  padding: '12px',
+                  backgroundColor: '#0d1117',
+                  minHeight: '120px'
+                }}>
+                  <ReactMarkdown
+                    components={{
+                      h1: ({ children }) => <h1 style={{ color: '#58a6ff', marginTop: '0', marginBottom: '10px', fontSize: '1.3em' }}>{children}</h1>,
+                      h2: ({ children }) => <h2 style={{ color: '#58a6ff', marginTop: '16px', marginBottom: '8px', fontSize: '1.1em' }}>{children}</h2>,
+                      h3: ({ children }) => <h3 style={{ color: '#58a6ff', marginTop: '14px', marginBottom: '6px', fontSize: '1em' }}>{children}</h3>,
+                      p: ({ children }) => <p style={{ marginBottom: '8px' }}>{children}</p>,
+                      ul: ({ children }) => <ul style={{ marginLeft: '16px', marginBottom: '8px' }}>{children}</ul>,
+                      ol: ({ children }) => <ol style={{ marginLeft: '16px', marginBottom: '8px' }}>{children}</ol>,
+                      li: ({ children }) => <li style={{ marginBottom: '2px' }}>{children}</li>,
+                      code: ({ children }) => <code style={{ backgroundColor: '#161b22', padding: '2px 4px', borderRadius: '3px', fontFamily: 'monospace' }}>{children}</code>,
+                      pre: ({ children }) => <pre style={{ backgroundColor: '#161b22', padding: '8px', borderRadius: '4px', overflow: 'auto', marginBottom: '8px' }}>{children}</pre>,
+                      blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid #58a6ff', paddingLeft: '8px', marginBottom: '8px', color: '#a9b1bb' }}>{children}</blockquote>,
+                      strong: ({ children }) => <strong style={{ color: '#f85149' }}>{children}</strong>,
+                      em: ({ children }) => <em style={{ color: '#d29922' }}>{children}</em>,
+                    }}
+                  >
+                    {form.description || '*Описание не добавлено*'}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <textarea className="textarea" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+              )}
+            </div>
+          </>
+        ) : (view === 'add' && selectedLessonId) ? (
+          <>
+            <div className="form-row full-row">
+              <label>Тип</label>
+              <select className="select" value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}>
+                <option value="quiz">quiz</option>
+                <option value="code">code</option>
+              </select>
+            </div>
+            <div className="form-row full-row">
+              <label>Заголовок</label>
+              <input className="input" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+            </div>
+            <div className="form-row full-row">
+              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                Описание
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowMarkdownHelp(true)}
+                    style={{
+                      backgroundColor: '#6c757d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                    title="Показать справку по Markdown"
+                  >
+                    ❓ Markdown
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDescriptionPreview(!showDescriptionPreview)}
+                    style={{
+                      backgroundColor: '#17a2b8',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {showDescriptionPreview ? '✏️ Редактировать' : '👁️ Preview'}
+                  </button>
+                </div>
+              </label>
+              {showDescriptionPreview ? (
+                <div style={{
+                  border: '1px solid #243049',
+                  borderRadius: '6px',
+                  padding: '12px',
+                  backgroundColor: '#0d1117',
+                  minHeight: '120px'
+                }}>
+                  <ReactMarkdown
+                    components={{
+                      h1: ({ children }) => <h1 style={{ color: '#58a6ff', marginTop: '0', marginBottom: '10px', fontSize: '1.3em' }}>{children}</h1>,
+                      h2: ({ children }) => <h2 style={{ color: '#58a6ff', marginTop: '16px', marginBottom: '8px', fontSize: '1.1em' }}>{children}</h2>,
+                      h3: ({ children }) => <h3 style={{ color: '#58a6ff', marginTop: '14px', marginBottom: '6px', fontSize: '1em' }}>{children}</h3>,
+                      p: ({ children }) => <p style={{ marginBottom: '8px' }}>{children}</p>,
+                      ul: ({ children }) => <ul style={{ marginLeft: '16px', marginBottom: '8px' }}>{children}</ul>,
+                      ol: ({ children }) => <ol style={{ marginLeft: '16px', marginBottom: '8px' }}>{children}</ol>,
+                      li: ({ children }) => <li style={{ marginBottom: '2px' }}>{children}</li>,
+                      code: ({ children }) => <code style={{ backgroundColor: '#161b22', padding: '2px 4px', borderRadius: '3px', fontFamily: 'monospace' }}>{children}</code>,
+                      pre: ({ children }) => <pre style={{ backgroundColor: '#161b22', padding: '8px', borderRadius: '4px', overflow: 'auto', marginBottom: '8px' }}>{children}</pre>,
+                      blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid #58a6ff', paddingLeft: '8px', marginBottom: '8px', color: '#a9b1bb' }}>{children}</blockquote>,
+                      strong: ({ children }) => <strong style={{ color: '#f85149' }}>{children}</strong>,
+                      em: ({ children }) => <em style={{ color: '#d29922' }}>{children}</em>,
+                    }}
+                  >
+                    {form.description || '*Описание не добавлено*'}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <textarea className="textarea" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+              )}
+            </div>
+          </>
+        ) : null}
+        {(view === 'add' && selectedLessonId || selectedId) && form.kind === 'quiz' ? (
           <div className="full-row">
             <button className="btn" style={{ width: '100%', marginBottom: 8 }} onClick={() => setQuizOptions(q => [...q, { text: '', correct: q.length === 0 }])}>+ Добавить вариант</button>
             <div className="stack">
@@ -453,7 +652,7 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
               ))}
             </div>
           </div>
-        ) : form.kind === 'code' ? (
+        ) : (view === 'add' && selectedLessonId || selectedId) && form.kind === 'code' ? (
           <div className="full-row">
             <div className="tabs" style={{ marginBottom: 12 }}>
               <button className={`tab ${activeTab === 'tests' ? 'active' : ''}`} onClick={() => setActiveTab('tests')}>Тестовые данные</button>
@@ -529,23 +728,23 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
               </div>
             )} */}
           </div>
-        ) : (
+        ) : (view === 'add' && selectedLessonId || selectedId) ? (
           <div className="form-row full-row">
             <label>test_spec</label>
             <textarea className="textarea" placeholder='{"function":"add","tests":[[1,2,3]]}' value={form.test_spec || ''} onChange={e => setForm({ ...form, test_spec: e.target.value })} />
           </div>
-        )}
+        ) : null}
       </div>
 
       <div className="row" style={{ marginTop: 12 }}>
-        {view === 'add' ? (
+        {view === 'add' && selectedLessonId ? (
           <button className="btn" onClick={createTask}>Создать</button>
-        ) : (
+        ) : selectedId ? (
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn" onClick={updateTask} disabled={!selectedId}>Сохранить изменения</button>
-            <button className="btn" onClick={deleteTask} disabled={!selectedId} style={{ backgroundColor: '#dc3545' }}>Удалить</button>
+            <button className="btn" onClick={updateTask}>Сохранить изменения</button>
+            <button className="btn" onClick={deleteTask} style={{ backgroundColor: '#dc3545' }}>Удалить</button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )

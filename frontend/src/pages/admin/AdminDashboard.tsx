@@ -116,9 +116,39 @@ export default function AdminDashboard() {
       {adminTab === 'manage' && (
         <div className="card" style={{ marginTop: 24 }}>
         <div className="tabs" style={{ justifyContent: 'flex-start' }}>
-          <button className="tab" onClick={() => setSection('languages')}>Языки</button>
-          <button className="tab" onClick={() => setSection('lessons')}>Уроки</button>
-          <button className="tab" onClick={() => setSection('tasks')}>Задания</button>
+          <button
+            className="tab"
+            onClick={() => setSection('languages')}
+            style={{
+              backgroundColor: section === 'languages' ? '#3dd179' : '#101a2a',
+              color: section === 'languages' ? '#092013' : '#e6edf3',
+              fontWeight: section === 'languages' ? 'bold' : 'normal'
+            }}
+          >
+            Языки
+          </button>
+          <button
+            className="tab"
+            onClick={() => setSection('lessons')}
+            style={{
+              backgroundColor: section === 'lessons' ? '#3dd179' : '#101a2a',
+              color: section === 'lessons' ? '#092013' : '#e6edf3',
+              fontWeight: section === 'lessons' ? 'bold' : 'normal'
+            }}
+          >
+            Уроки
+          </button>
+          <button
+            className="tab"
+            onClick={() => setSection('tasks')}
+            style={{
+              backgroundColor: section === 'tasks' ? '#3dd179' : '#101a2a',
+              color: section === 'tasks' ? '#092013' : '#e6edf3',
+              fontWeight: section === 'tasks' ? 'bold' : 'normal'
+            }}
+          >
+            Задания
+          </button>
         </div>
         {section === 'languages' && (
           <LanguagesTab />
@@ -127,8 +157,28 @@ export default function AdminDashboard() {
           <div>
             <h2>Задания</h2>
             <div className="tabs">
-              <button className="tab" onClick={() => setView('add')}>Добавить</button>
-              <button className="tab" onClick={() => setView('update')}>Обновить</button>
+              <button
+                className="tab"
+                onClick={() => setView('add')}
+                style={{
+                  backgroundColor: view === 'add' ? '#3dd179' : '#101a2a',
+                  color: view === 'add' ? '#092013' : '#e6edf3',
+                  fontWeight: view === 'add' ? 'bold' : 'normal'
+                }}
+              >
+                Добавить
+              </button>
+              <button
+                className="tab"
+                onClick={() => setView('update')}
+                style={{
+                  backgroundColor: view === 'update' ? '#3dd179' : '#101a2a',
+                  color: view === 'update' ? '#092013' : '#e6edf3',
+                  fontWeight: view === 'update' ? 'bold' : 'normal'
+                }}
+              >
+                Изменить
+              </button>
             </div>
             <TasksTab view={view} />
           </div>

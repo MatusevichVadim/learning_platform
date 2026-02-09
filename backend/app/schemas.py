@@ -43,6 +43,7 @@ class TaskOut(BaseModel):
     description: str
     kind: str
     test_spec: Optional[str] = None
+    order_index: int = 0
     model_config = ConfigDict(from_attributes=True)
 
 

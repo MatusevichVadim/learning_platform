@@ -409,7 +409,14 @@ def create_task(lesson_id: int, data: dict, _: dict = Depends(get_current_admin)
     description = str(data.get("description", ""))
     kind = str(data.get("kind", "quiz"))
     test_spec = data.get("test_spec")
-    task = Task(lesson_id=lesson_id, title=title, description=description, kind=kind, test_spec=json.dumps(test_spec) if isinstance(test_spec, (dict, list)) else test_spec)
+    
+    # Compute next order_index for this lesson
+    last_task = db.execute(
+        select(Task).where(Task.lesson_id == lesson_id).order_by(Task.order_index.desc())
+    ).scalars().first()
+    order_index = (last_task.order_index + 1) if last_task else 1
+    
+    task = Task(lesson_id=lesson_id, title=title, description=description, kind=kind, test_spec=json.dumps(test_spec) if isinstance(test_spec, (dict, list)) else test_spec, order_index=order_index)
     db.add(task)
     db.flush()
     return task
@@ -434,7 +441,14 @@ def create_task_auto(data: dict, _: dict = Depends(get_current_admin), db: Sessi
     description = str(data.get("description", ""))
     kind = str(data.get("kind", "quiz"))
     test_spec = data.get("test_spec")
-    task = Task(lesson_id=lesson.id, title=title, description=description, kind=kind, test_spec=json.dumps(test_spec) if isinstance(test_spec, (dict, list)) else test_spec)
+    
+    # Compute next order_index for this lesson
+    last_task = db.execute(
+        select(Task).where(Task.lesson_id == lesson.id).order_by(Task.order_index.desc())
+    ).scalars().first()
+    order_index = (last_task.order_index + 1) if last_task else 1
+    
+    task = Task(lesson_id=lesson.id, title=title, description=description, kind=kind, test_spec=json.dumps(test_spec) if isinstance(test_spec, (dict, list)) else test_spec, order_index=order_index)
     db.add(task)
     db.flush()
     return task
@@ -449,6 +463,41 @@ def delete_task(task_id: int, _: dict = Depends(get_current_admin), db: Session 
     db.delete(task)
     db.flush()
     return {"status": "deleted"}
+
+@router.post("/tasks/{task_id}/move")
+def move_task(task_id: int, data: dict, _: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    task = db.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    direction = data.get("direction")  # "up" or "down"
+    if direction not in ["up", "down"]:
+        raise HTTPException(status_code=400, detail="Direction must be 'up' or 'down'")
+    
+    # Find adjacent task with same lesson_id
+    if direction == "up":
+        adjacent = db.execute(
+            select(Task)
+            .where(Task.lesson_id == task.lesson_id)
+            .where(Task.order_index < task.order_index)
+            .order_by(Task.order_index.desc())
+        ).scalars().first()
+    else:
+        adjacent = db.execute(
+            select(Task)
+            .where(Task.lesson_id == task.lesson_id)
+            .where(Task.order_index > task.order_index)
+            .order_by(Task.order_index.asc())
+        ).scalars().first()
+    
+    if adjacent:
+        # Swap order_index values
+        temp = task.order_index
+        task.order_index = adjacent.order_index
+        adjacent.order_index = temp
+        db.flush()
+    
+    return {"status": "moved", "direction": direction}
 
 @router.get("/export/submissions.csv")
 def export_submissions_csv(_: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
