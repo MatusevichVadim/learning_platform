@@ -118,26 +118,29 @@ export default function LanguagesTab() {
       />
 
       <h3>Создать язык программирования</h3>
-      <div className="form-grid" style={{ gridTemplateColumns: '1fr 2fr 2fr auto' }}>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           className="input"
           value={form.id}
           onChange={e => setForm({ ...form, id: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })}
           placeholder="Идентификатор (например: mylang)"
+          style={{ flex: '1 1 200px', minWidth: '180px' }}
         />
         <input
           className="input"
           value={form.name}
           onChange={e => setForm({ ...form, name: e.target.value })}
           placeholder="Название (например: My Language)"
+          style={{ flex: '2 1 250px', minWidth: '200px' }}
         />
         <input
           className="input"
           value={form.image_url}
           onChange={e => setForm({ ...form, image_url: e.target.value })}
           placeholder="URL изображения (опционально)"
+          style={{ flex: '2 1 250px', minWidth: '200px' }}
         />
-        <button className="btn" onClick={create}>Создать</button>
+        <button className="btn" onClick={create} style={{ flexShrink: 0 }}>Создать</button>
       </div>
 
       <h3 style={{ marginTop: 16 }}>Список языков</h3>

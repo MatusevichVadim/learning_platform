@@ -474,7 +474,7 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
         </div>
       )}
 
-      <div className="form-grid">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '100%' }}>
         {view === 'add' && (
           <>
             {filterLang && (

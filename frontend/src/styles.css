@@ -76,7 +76,7 @@ body::before {
 .btn:hover { filter: brightness(1.05); }
 .btn:active { transform: translateY(1px); }
 .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
-.input, .textarea, .select { width: 100%; max-width: 100%; background: #111a2b; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: block; }
+.input, .textarea, .select { width: 100%; max-width: 100%; box-sizing: border-box; background: #111a2b; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: block; }
 
 /* CodeMirror styling to match site theme */
 .cm-editor { background: #111a2b !important; border: 1px solid #243049 !important; border-radius: 10px !important; }

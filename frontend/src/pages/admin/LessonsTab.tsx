@@ -279,14 +279,25 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
       )}
 
       <h3>Создать урок</h3>
-      <div className="form-grid" style={{ gridTemplateColumns: '1fr 2fr auto' }}>
-        <select className="select" value={form.language} onChange={e => setForm({ ...form, language: e.target.value })}>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <select 
+          className="select" 
+          value={form.language} 
+          onChange={e => setForm({ ...form, language: e.target.value })}
+          style={{ flex: '1 1 150px', minWidth: '140px' }}
+        >
           {languages.map(lang => (
             <option key={lang.id} value={lang.id}>{lang.name}</option>
           ))}
         </select>
-        <input className="input" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Название урока" />
-        <button className="btn" onClick={create}>Создать</button>
+        <input 
+          className="input" 
+          value={form.title} 
+          onChange={e => setForm({ ...form, title: e.target.value })} 
+          placeholder="Название урока" 
+          style={{ flex: '2 1 250px', minWidth: '200px' }}
+        />
+        <button className="btn" onClick={create} style={{ flexShrink: 0 }}>Создать</button>
       </div>
 
       <h3 style={{ marginTop: 16 }}>Список уроков ({form.language})</h3>
