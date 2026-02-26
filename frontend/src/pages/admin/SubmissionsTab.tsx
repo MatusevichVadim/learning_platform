@@ -27,6 +27,7 @@ export default function SubmissionsTab() {
   const [comment, setComment] = useState('')
   const [taskDescription, setTaskDescription] = useState('')
   const [loading, setLoading] = useState(false)
+  const [copiedCode, setCopiedCode] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => { refresh() }, [page])
@@ -76,6 +77,7 @@ export default function SubmissionsTab() {
     setSelectedSubmission(submission)
     setComment('')
     setTaskDescription('')
+    setCopiedCode(false)
 
     // Fetch task details
     try {
@@ -92,6 +94,16 @@ export default function SubmissionsTab() {
     }
 
     setShowModal(true)
+  }
+
+  async function copyCodeToClipboard(code: string) {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopiedCode(true)
+      setTimeout(() => setCopiedCode(false), 2000)
+    } catch (error) {
+      console.error('Failed to copy code:', error)
+    }
   }
 
 
@@ -346,19 +358,44 @@ export default function SubmissionsTab() {
             <div style={{ marginBottom: '12px' }}>
               <strong style={{ color: '#e6edf3' }}>Код решения:</strong>
             </div>
-            <pre style={{
-              backgroundColor: '#111a2b',
-              border: '1px solid #243049',
-              borderRadius: '10px',
-              padding: '12px',
-              color: '#e6edf3',
-              fontFamily: 'monospace',
-              whiteSpace: 'pre-wrap',
-              maxHeight: '300px',
-              overflow: 'auto'
-            }}>
-              {selectedSubmission.code}
-            </pre>
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => selectedSubmission?.code && copyCodeToClipboard(selectedSubmission.code)}
+                title="Копировать код"
+                style={{
+                  position: 'absolute',
+                  top: '10px',
+                  right: '10px',
+                  backgroundColor: copiedCode ? '#28a745' : 'rgba(255, 255, 255, 0.15)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  zIndex: 10,
+                  transition: 'all 0.2s ease',
+                  opacity: 0.7
+                }}
+                onMouseOver={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1.05)' }}
+                onMouseOut={e => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.transform = 'scale(1)' }}
+              >
+                {copiedCode ? '✓' : '📋'}
+              </button>
+              <pre style={{
+                backgroundColor: '#111a2b',
+                border: '1px solid #243049',
+                borderRadius: '10px',
+                padding: '12px',
+                color: '#e6edf3',
+                fontFamily: 'monospace',
+                whiteSpace: 'pre-wrap',
+                maxHeight: '300px',
+                overflow: 'auto'
+              }}>
+                {selectedSubmission.code}
+              </pre>
+            </div>
 
             <div style={{ marginTop: '16px' }}>
               <label>
