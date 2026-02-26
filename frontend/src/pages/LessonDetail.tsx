@@ -4,6 +4,7 @@ import { listTasks, submitQuiz, submitCode, lessonStatus, getTaskSubmission, get
 import { t } from '../i18n'
 import CodeInterpreter from '../components/CodeInterpreter'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 type Task = { id: number; title: string; description: string; kind: string; test_spec?: string }
 
@@ -288,6 +289,7 @@ export default function LessonDetail() {
           <h3>{task.title}</h3>
           <div style={{ color: '#e6edf3', lineHeight: '1.6', marginBottom: '16px' }}>
             <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
               components={{
                 h1: ({ children }) => <h1 style={{ color: '#58a6ff', marginTop: '20px', marginBottom: '10px', fontSize: '1.5em' }}>{children}</h1>,
                 h2: ({ children }) => <h2 style={{ color: '#58a6ff', marginTop: '16px', marginBottom: '8px', fontSize: '1.3em' }}>{children}</h2>,
@@ -301,6 +303,10 @@ export default function LessonDetail() {
                 blockquote: ({ children }) => <blockquote style={{ borderLeft: '4px solid #58a6ff', paddingLeft: '12px', marginBottom: '12px', color: '#a9b1bb' }}>{children}</blockquote>,
                 strong: ({ children }) => <strong style={{ color: '#f85149' }}>{children}</strong>,
                 em: ({ children }) => <em style={{ color: '#d29922' }}>{children}</em>,
+                table: ({ children }) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '12px' }}>{children}</table>,
+                th: ({ children }) => <th style={{ border: '1px solid #243049', padding: '8px', backgroundColor: '#0d1117', textAlign: 'left' }}>{children}</th>,
+                td: ({ children }) => <td style={{ border: '1px solid #243049', padding: '8px' }}>{children}</td>,
+                tr: ({ children }) => <tr>{children}</tr>,
               }}
             >
               {task.description || 'Описание задания не добавлено.'}
@@ -496,6 +502,7 @@ export default function LessonDetail() {
             </div>
             <div style={{ color: '#e6edf3', lineHeight: '1.6' }}>
               <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
                 components={{
                   h1: ({ children }) => <h1 style={{ color: '#58a6ff', marginTop: '20px', marginBottom: '10px', fontSize: '1.5em' }}>{children}</h1>,
                   h2: ({ children }) => <h2 style={{ color: '#58a6ff', marginTop: '16px', marginBottom: '8px', fontSize: '1.3em' }}>{children}</h2>,
@@ -509,6 +516,10 @@ export default function LessonDetail() {
                   blockquote: ({ children }) => <blockquote style={{ borderLeft: '4px solid #58a6ff', paddingLeft: '12px', marginBottom: '12px', color: '#a9b1bb' }}>{children}</blockquote>,
                   strong: ({ children }) => <strong style={{ color: '#f85149' }}>{children}</strong>,
                   em: ({ children }) => <em style={{ color: '#d29922' }}>{children}</em>,
+                  table: ({ children }) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '12px' }}>{children}</table>,
+                  th: ({ children }) => <th style={{ border: '1px solid #243049', padding: '8px', backgroundColor: '#0d1117', textAlign: 'left' }}>{children}</th>,
+                  td: ({ children }) => <td style={{ border: '1px solid #243049', padding: '8px' }}>{children}</td>,
+                  tr: ({ children }) => <tr>{children}</tr>,
                 }}
               >
                 {additionalInfo || 'Дополнительная информация для этого урока пока не добавлена.'}

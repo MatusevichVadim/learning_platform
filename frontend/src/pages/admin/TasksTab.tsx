@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import axios from 'axios'
 import { adminHeaders } from '../../api'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 type Task = { id: number; lesson_id: number; title: string; description: string; kind: string; test_spec?: string; order_index?: number }
 type Lesson = { id: number; language: string; title: string; order_index: number }
@@ -316,6 +317,35 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
                 <div style={{ marginBottom: '8px' }}><code style={{ color: '#a9b1bb' }}>[текст ссылки](url)</code> → <a href="#" style={{ color: '#58a6ff' }}>текст ссылки</a></div>
                 <div><code style={{ color: '#a9b1bb' }}>![alt текст](url изображения)</code> → изображение</div>
               </div>
+
+              <h4 style={{ color: '#58a6ff', marginTop: '20px', marginBottom: '10px' }}>Таблицы</h4>
+              <div style={{ backgroundColor: '#0d1117', padding: '12px', borderRadius: '6px', marginBottom: '16px' }}>
+                <div style={{ marginBottom: '8px', fontSize: '12px', color: '#a9b1bb', fontFamily: 'monospace' }}>
+                  | Заголовок 1 | Заголовок 2 |<br/>
+                  |------------|-----------|<br/>
+                  | Ячейка 1   | Ячейка 2   |<br/>
+                  | Ячейка 3   | Ячейка 4   |
+                </div>
+                <div style={{ marginLeft: '20px', marginBottom: '8px' }}>→</div>
+                <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '0' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ border: '1px solid #243049', padding: '6px', backgroundColor: '#161b22', textAlign: 'left' }}>Заголовок 1</th>
+                      <th style={{ border: '1px solid #243049', padding: '6px', backgroundColor: '#161b22', textAlign: 'left' }}>Заголовок 2</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ border: '1px solid #243049', padding: '6px' }}>Ячейка 1</td>
+                      <td style={{ border: '1px solid #243049', padding: '6px' }}>Ячейка 2</td>
+                    </tr>
+                    <tr>
+                      <td style={{ border: '1px solid #243049', padding: '6px' }}>Ячейка 3</td>
+                      <td style={{ border: '1px solid #243049', padding: '6px' }}>Ячейка 4</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -532,6 +562,7 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
                   minHeight: '120px'
                 }}>
                   <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
                     components={{
                       h1: ({ children }) => <h1 style={{ color: '#58a6ff', marginTop: '0', marginBottom: '10px', fontSize: '1.3em' }}>{children}</h1>,
                       h2: ({ children }) => <h2 style={{ color: '#58a6ff', marginTop: '16px', marginBottom: '8px', fontSize: '1.1em' }}>{children}</h2>,
@@ -545,6 +576,10 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
                       blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid #58a6ff', paddingLeft: '8px', marginBottom: '8px', color: '#a9b1bb' }}>{children}</blockquote>,
                       strong: ({ children }) => <strong style={{ color: '#f85149' }}>{children}</strong>,
                       em: ({ children }) => <em style={{ color: '#d29922' }}>{children}</em>,
+                      table: ({ children }) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '8px' }}>{children}</table>,
+                      th: ({ children }) => <th style={{ border: '1px solid #243049', padding: '6px', backgroundColor: '#161b22', textAlign: 'left' }}>{children}</th>,
+                      td: ({ children }) => <td style={{ border: '1px solid #243049', padding: '6px' }}>{children}</td>,
+                      tr: ({ children }) => <tr>{children}</tr>,
                     }}
                   >
                     {form.description || '*Описание не добавлено*'}
@@ -614,6 +649,7 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
                   minHeight: '120px'
                 }}>
                   <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
                     components={{
                       h1: ({ children }) => <h1 style={{ color: '#58a6ff', marginTop: '0', marginBottom: '10px', fontSize: '1.3em' }}>{children}</h1>,
                       h2: ({ children }) => <h2 style={{ color: '#58a6ff', marginTop: '16px', marginBottom: '8px', fontSize: '1.1em' }}>{children}</h2>,
@@ -627,6 +663,10 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
                       blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid #58a6ff', paddingLeft: '8px', marginBottom: '8px', color: '#a9b1bb' }}>{children}</blockquote>,
                       strong: ({ children }) => <strong style={{ color: '#f85149' }}>{children}</strong>,
                       em: ({ children }) => <em style={{ color: '#d29922' }}>{children}</em>,
+                      table: ({ children }) => <table style={{ borderCollapse: 'collapse', width: '100%', marginBottom: '8px' }}>{children}</table>,
+                      th: ({ children }) => <th style={{ border: '1px solid #243049', padding: '6px', backgroundColor: '#161b22', textAlign: 'left' }}>{children}</th>,
+                      td: ({ children }) => <td style={{ border: '1px solid #243049', padding: '6px' }}>{children}</td>,
+                      tr: ({ children }) => <tr>{children}</tr>,
                     }}
                   >
                     {form.description || '*Описание не добавлено*'}
