@@ -223,6 +223,15 @@ export default function LessonDetail() {
           setQuizAttempts(prev => {
             const newAttempts = { ...prev, [task.id]: (prev[task.id] || 0) + 1 }
             localStorage.setItem(`quiz_attempts_${lessonId}_${task.id}`, String(newAttempts[task.id]))
+            
+            // If 3 failed attempts, move to next task (if not the last one)
+            if (newAttempts[task.id] >= 3) {
+              const currentTaskIndex = tasks.findIndex(t => t.id === task.id)
+              if (currentTaskIndex !== -1 && currentTaskIndex < tasks.length - 1) {
+                setActiveIdx(currentTaskIndex + 1)
+              }
+            }
+            
             return newAttempts
           })
         }
