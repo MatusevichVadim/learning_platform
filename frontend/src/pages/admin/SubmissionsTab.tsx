@@ -98,7 +98,21 @@ export default function SubmissionsTab() {
 
   async function copyCodeToClipboard(code: string) {
     try {
-      await navigator.clipboard.writeText(code)
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(code)
+      } else {
+        // Fallback for older browsers or non-secure contexts
+        const textArea = document.createElement('textarea')
+        textArea.value = code
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-999999px'
+        textArea.style.top = '-999999px'
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+      }
       setCopiedCode(true)
       setTimeout(() => setCopiedCode(false), 2000)
     } catch (error) {
@@ -360,7 +374,7 @@ export default function SubmissionsTab() {
             </div>
             <div style={{ position: 'relative' }}>
               <button
-                onClick={() => selectedSubmission?.code && copyCodeToClipboard(selectedSubmission.code)}
+                onClick={() => selectedSubmission?.code ? copyCodeToClipboard(selectedSubmission.code) : null}
                 title="Копировать код"
                 style={{
                   position: 'absolute',

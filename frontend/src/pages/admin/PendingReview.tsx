@@ -17,6 +17,7 @@ export default function PendingReview() {
   const [selectedSubmission, setSelectedSubmission] = useState<PendingSubmission | null>(null)
   const [comment, setComment] = useState('')
   const [loading, setLoading] = useState(false)
+  const [copiedCode, setCopiedCode] = useState(false)
 
   useEffect(() => {
     loadPendingSubmissions()
@@ -48,6 +49,30 @@ export default function PendingReview() {
       alert('Ошибка при проверке решения')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function copyCodeToClipboard(code: string) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(code)
+      } else {
+        // Fallback for older browsers or non-secure contexts
+        const textArea = document.createElement('textarea')
+        textArea.value = code
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-999999px'
+        textArea.style.top = '-999999px'
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+      }
+      setCopiedCode(true)
+      setTimeout(() => setCopiedCode(false), 2000)
+    } catch (error) {
+      console.error('Failed to copy code:', error)
     }
   }
 
@@ -84,20 +109,45 @@ export default function PendingReview() {
           </div>
 
           <h4>Код решения:</h4>
-          <pre style={{
-            backgroundColor: '#111a2b',
-            color: '#e6edf3',
-            padding: '12px',
-            borderRadius: '10px',
-            overflow: 'auto',
-            maxHeight: '400px',
-            border: '1px solid #243049',
-            fontFamily: 'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-            fontSize: '14px',
-            lineHeight: '1.4'
-          }}>
-            {selectedSubmission.code}
-          </pre>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => selectedSubmission?.code ? copyCodeToClipboard(selectedSubmission.code) : null}
+              title="Копировать код"
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                backgroundColor: copiedCode ? '#28a745' : 'rgba(255, 255, 255, 0.15)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '14px',
+                cursor: 'pointer',
+                zIndex: 10,
+                transition: 'all 0.2s ease',
+                opacity: 0.7
+              }}
+              onMouseOver={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1.05)' }}
+              onMouseOut={e => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.transform = 'scale(1)' }}
+            >
+              {copiedCode ? '✓' : '📋'}
+            </button>
+            <pre style={{
+              backgroundColor: '#111a2b',
+              color: '#e6edf3',
+              padding: '12px',
+              borderRadius: '10px',
+              overflow: 'auto',
+              maxHeight: '400px',
+              border: '1px solid #243049',
+              fontFamily: 'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+              fontSize: '14px',
+              lineHeight: '1.4'
+            }}>
+              {selectedSubmission.code}
+            </pre>
+          </div>
           
           <div style={{ marginTop: '20px' }}>
             <label>
