@@ -238,7 +238,21 @@ export default function SubmissionsTab() {
                       </button>
                     )}
                   </div>
-                ) : (s.is_correct ? 'Правильно' : 'Неправильно')}
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {s.is_correct ? 'Правильно' : 'Неправильно'}
+                    {s.code && (
+                      <button
+                        className="btn"
+                        style={{ fontSize: '12px', padding: '4px 8px', backgroundColor: 'rgba(255, 255, 255, 0.15)' }}
+                        onClick={() => onViewSolution(s)}
+                        title="Просмотреть решение"
+                      >
+                        🔍
+                      </button>
+                    )}
+                  </div>
+                )}
                 {s.code && s.code.includes('AUTO_TEST_SUCCESS') && (
                   <span style={{
                     display: 'inline-block',
