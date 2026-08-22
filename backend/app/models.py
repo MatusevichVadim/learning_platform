@@ -74,33 +74,3 @@ class Submission(Base):
 
     user: Mapped[User] = relationship("User", back_populates="submissions")
     task: Mapped[Task] = relationship("Task", back_populates="submissions")
-
-
-class CompetitionRoom(Base):
-    __tablename__ = "competition_rooms"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), default="Typing Competition")
-    game_time: Mapped[int] = mapped_column(Integer, default=60)  # seconds
-    difficulty: Mapped[int] = mapped_column(Integer, default=2)  # 0-5
-    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-    participants: Mapped[list[CompetitionParticipant]] = relationship("CompetitionParticipant", back_populates="room", cascade="all, delete-orphan")
-
-
-class CompetitionParticipant(Base):
-    __tablename__ = "competition_participants"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    room_id: Mapped[int] = mapped_column(ForeignKey("competition_rooms.id", ondelete="CASCADE"))
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    user_name: Mapped[str] = mapped_column(String(100))
-    score: Mapped[int] = mapped_column(Integer, default=0)
-    is_connected: Mapped[bool] = mapped_column(Boolean, default=True)
-    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-    room: Mapped[CompetitionRoom] = relationship("CompetitionRoom", back_populates="participants")
-    user: Mapped[User] = relationship("User")
-
-

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import create_access_token, decode_token
 from ..db import get_session
-from ..models import Language, Lesson, Task, Submission, User, CompetitionRoom, CompetitionParticipant
+from ..models import Language, Lesson, Task, Submission, User
 from ..checker import run_python_tests
 from ..schemas import UserCreate, UserOut, LessonOut, TaskOut, SubmitQuiz, SubmitCode, SubmissionOut
 
@@ -252,104 +252,5 @@ def submit_code(task_id: int, payload: SubmitCode, user: User = Depends(get_curr
             "status": submission.status,
         }
     return response
-
-
-# Competition endpoints for users
-@router.get("/competition/room")
-def get_competition_room_public(db: Session = Depends(get_db)):
-    room = db.execute(select(CompetitionRoom)).scalars().first()
-    if not room:
-        room = CompetitionRoom()
-        db.add(room)
-        db.flush()
-    return {
-        "id": room.id,
-        "name": room.name,
-        "game_time": room.game_time,
-        "difficulty": room.difficulty,
-        "is_active": room.is_active
-    }
-
-
-@router.post("/competition/join")
-def join_competition_room(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    room = db.execute(select(CompetitionRoom)).scalars().first()
-    if not room:
-        room = CompetitionRoom()
-        db.add(room)
-        db.flush()
-
-    # Check if user is already in the room
-    existing = db.execute(
-        select(CompetitionParticipant)
-        .where(CompetitionParticipant.room_id == room.id, CompetitionParticipant.user_id == user.id)
-    ).scalars().first()
-
-    if not existing:
-        participant = CompetitionParticipant(
-            room_id=room.id,
-            user_id=user.id,
-            user_name=user.name,
-            score=0,
-            is_connected=True
-        )
-        db.add(participant)
-        db.flush()
-    else:
-        existing.is_connected = True
-        db.flush()
-
-    return {"status": "joined"}
-
-
-@router.get("/competition/participants")
-def get_competition_participants_public(db: Session = Depends(get_db)):
-    room = db.execute(select(CompetitionRoom)).scalars().first()
-    if not room:
-        return []
-
-    participants = db.execute(
-        select(CompetitionParticipant)
-        .where(CompetitionParticipant.room_id == room.id)
-        .order_by(CompetitionParticipant.score.desc())
-    ).scalars().all()
-
-    return [{
-        "id": p.id,
-        "user_name": p.user_name,
-        "score": p.score,
-        "is_connected": p.is_connected
-    } for p in participants]
-
-
-@router.post("/competition/update-score")
-def update_competition_score(data: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    room = db.execute(select(CompetitionRoom)).scalars().first()
-    if not room or not room.is_active:
-        raise HTTPException(status_code=400, detail="No active competition")
-
-    participant = db.execute(
-        select(CompetitionParticipant)
-        .where(CompetitionParticipant.room_id == room.id, CompetitionParticipant.user_id == user.id)
-    ).scalars().first()
-
-    if not participant:
-        raise HTTPException(status_code=404, detail="Participant not found")
-
-    participant.score = data.get("score", participant.score)
-    db.flush()
-    return {"status": "updated"}
-
-
-@router.get("/competition/words")
-def get_competition_words(db: Session = Depends(get_db)):
-    # Simple word list - in real implementation, this could be more sophisticated
-    words = [
-        "hello", "world", "typing", "speed", "competition", "keyboard", "practice", "challenge",
-        "python", "javascript", "programming", "developer", "software", "computer", "algorithm",
-        "function", "variable", "string", "integer", "boolean", "array", "object", "class",
-        "method", "property", "interface", "inheritance", "polymorphism", "encapsulation"
-    ]
-    return {"words": words}
 
 

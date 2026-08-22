@@ -5,7 +5,6 @@ import Home from './pages/Home'
 import LanguageSelect from './pages/LanguageSelect'
 import Lessons from './pages/Lessons'
 import LessonDetail from './pages/LessonDetail'
-import CompetitionRoom from './pages/CompetitionRoom'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import UserSubmissions from './pages/admin/UserSubmissions'
@@ -35,14 +34,6 @@ const router = createBrowserRouter([
     element: (
       <UserProtectedRoute>
         <LessonDetail />
-      </UserProtectedRoute>
-    )
-  },
-  {
-    path: '/competition',
-    element: (
-      <UserProtectedRoute>
-        <CompetitionRoom />
       </UserProtectedRoute>
     )
   },

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..auth import create_access_token, decode_token
 from ..config import ADMIN_USERNAME, ADMIN_PASSWORD
 from ..db import get_session
-from ..models import Language, Lesson, Task, Submission, User, CompetitionRoom, CompetitionParticipant
+from ..models import Language, Lesson, Task, Submission, User
 from ..schemas import AdminLogin, LessonOut, TaskOut, UserOut
 
 # Upload directory for language images - save to backend/uploads
@@ -510,111 +510,5 @@ def export_submissions_csv(_: dict = Depends(get_current_admin), db: Session = D
         writer.writerow([r.id, r.user_id, r.task_id, int(r.is_correct), r.result or "", r.created_at.isoformat()])
     csv_text = buf.getvalue()
     return Response(content=csv_text, media_type="text/csv")
-
-
-# Competition endpoints
-@router.get("/competition/room")
-def get_competition_room(_: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
-    room = db.execute(select(CompetitionRoom)).scalars().first()
-    if not room:
-        room = CompetitionRoom()
-        db.add(room)
-        db.flush()
-    return {
-        "id": room.id,
-        "name": room.name,
-        "game_time": room.game_time,
-        "difficulty": room.difficulty,
-        "is_active": room.is_active
-    }
-
-
-@router.put("/competition/room")
-def update_competition_room(data: dict, _: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
-    room = db.execute(select(CompetitionRoom)).scalars().first()
-    if not room:
-        room = CompetitionRoom()
-        db.add(room)
-
-    room.game_time = data.get("game_time", room.game_time)
-    room.difficulty = data.get("difficulty", room.difficulty)
-    room.is_active = data.get("is_active", room.is_active)
-    db.flush()
-    return {"status": "updated"}
-
-
-@router.get("/competition/participants")
-def get_competition_participants(_: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
-    room = db.execute(select(CompetitionRoom)).scalars().first()
-    if not room:
-        return []
-
-    participants = db.execute(
-        select(CompetitionParticipant)
-        .where(CompetitionParticipant.room_id == room.id)
-        .order_by(CompetitionParticipant.score.desc())
-    ).scalars().all()
-
-    return [{
-        "id": p.id,
-        "user_name": p.user_name,
-        "score": p.score,
-        "is_connected": p.is_connected,
-        "user_id": p.user_id
-    } for p in participants]
-
-
-@router.get("/competition/participants/{user_id}/submissions")
-def get_competition_user_submissions(
-    user_id: int,
-    _: dict = Depends(get_current_admin),
-    db: Session = Depends(get_db)
-):
-    """Get all submissions for a specific user in the competition (including code solutions)."""
-    stmt = (
-        select(Submission, Task.title.label('task_title'), Task.kind, Lesson.title.label('lesson_title'))
-        .join(Task, Task.id == Submission.task_id)
-        .join(Lesson, Lesson.id == Task.lesson_id)
-        .where(Submission.user_id == user_id)
-        .order_by(Submission.created_at.desc())
-    )
-    rows = db.execute(stmt).all()
-
-    out = []
-    for s, task_title, task_kind, lesson_title in rows:
-        out.append({
-            "id": s.id,
-            "task_title": task_title,
-            "task_kind": task_kind,
-            "lesson_title": lesson_title,
-            "code": s.code,
-            "answer": s.answer,
-            "is_correct": s.is_correct,
-            "result": s.result,
-            "status": s.status,
-            "created_at": s.created_at,
-        })
-    return out
-
-
-@router.post("/competition/start")
-def start_competition(_: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
-    room = db.execute(select(CompetitionRoom)).scalars().first()
-    if not room:
-        room = CompetitionRoom()
-        db.add(room)
-
-    room.is_active = True
-    db.flush()
-    return {"status": "started"}
-
-
-@router.post("/competition/stop")
-def stop_competition(_: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
-    room = db.execute(select(CompetitionRoom)).scalars().first()
-    if room:
-        room.is_active = False
-        db.flush()
-    return {"status": "stopped"}
 
 

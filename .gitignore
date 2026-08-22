@@ -12,6 +12,7 @@ dist/
 build/
 .pytest_cache/
 *.egg
+projectInfo.md
 
 # Backend
 backend_data.sqlite3

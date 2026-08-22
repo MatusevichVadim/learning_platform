@@ -7,7 +7,6 @@ import TasksTab from './TasksTab'
 import LessonsTab from './LessonsTab'
 import LanguagesTab from './LanguagesTab'
 import SubmissionsTab from './SubmissionsTab'
-import AdminCompetitionRoom from './AdminCompetitionRoom'
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
@@ -18,8 +17,8 @@ export default function AdminDashboard() {
   const [creator, setCreator] = useS<{ language: 'python'|'csharp'; lessonId?: number; type?: 'quiz'|'code'; title: string; description: string; options: string[]; correct?: string; tests: string }>({ language: 'python', title: '', description: '', options: ['', '', '', ''], tests: '' })
   const [updateTaskForm, setUpdateTaskForm] = useS({ id: 1, title: '', description: '', kind: 'quiz', test_spec: '' })
   const [view, setView] = useS<'add' | 'update'>('add')
-  const [section, setSection] = useS<'tasks' | 'lessons' | 'languages' | 'competition'>('languages')
-  const [adminTab, setAdminTab] = useS<'tables' | 'manage' | 'competition'>('tables')
+  const [section, setSection] = useS<'tasks' | 'lessons' | 'languages'>('languages')
+  const [adminTab, setAdminTab] = useS<'tables' | 'manage'>('tables')
 
   // Pagination and filtering state
   const [currentPage, setCurrentPage] = useState(1)
@@ -78,17 +77,6 @@ export default function AdminDashboard() {
         </button>
         <button
           className="tab"
-          onClick={() => setAdminTab('competition')}
-          style={{
-            backgroundColor: adminTab === 'competition' ? '#3dd179' : '#101a2a',
-            color: adminTab === 'competition' ? '#092013' : '#e6edf3',
-            fontWeight: adminTab === 'competition' ? 'bold' : 'normal'
-          }}
-        >
-          Соревнования
-        </button>
-        <button
-          className="tab"
           onClick={() => setAdminTab('manage')}
           style={{
             backgroundColor: adminTab === 'manage' ? '#3dd179' : '#101a2a',
@@ -103,13 +91,6 @@ export default function AdminDashboard() {
       {adminTab === 'tables' && (
         <div className="card">
           <SubmissionsTab />
-        </div>
-      )}
-
-      {adminTab === 'competition' && (
-        <div className="card">
-          <h2>Комната соревнований</h2>
-          <AdminCompetitionRoom />
         </div>
       )}
 
