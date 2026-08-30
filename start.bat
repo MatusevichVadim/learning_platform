@@ -1,22 +1,22 @@
 @echo off
 echo Starting backend and frontend...
 
-REM Check for updates from GitHub
-echo Checking for updates from GitHub...
-git fetch origin
+@REM REM Check for updates from GitHub
+@REM echo Checking for updates from GitHub...
+@REM git fetch origin
 
-REM Get current branch name
-for /f %%i in ('git rev-parse --abbrev-ref HEAD') do set branch=%%i
+@REM REM Get current branch name
+@REM for /f %%i in ('git rev-parse --abbrev-ref HEAD') do set branch=%%i
 
-REM Check if there are remote changes
-git status origin/%branch% >nul 2>&1
-if %errorlevel% equ 0 (
-    echo Found updates, pulling latest changes...
-    git pull origin %branch%
-    echo.
-    echo Updates downloaded! Please restart the application.
-    echo.
-)
+@REM REM Check if there are remote changes
+@REM git status origin/%branch% >nul 2>&1
+@REM if %errorlevel% equ 0 (
+@REM     echo Found updates, pulling latest changes...
+@REM     git pull origin %branch%
+@REM     echo.
+@REM     echo Updates downloaded! Please restart the application.
+@REM     echo.
+@REM )
 
 REM Install backend dependencies if needed
 echo Installing backend dependencies...

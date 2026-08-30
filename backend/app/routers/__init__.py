@@ -1,1 +1,1 @@
-from . import public, admin
+from . import public, admin, auth, profile

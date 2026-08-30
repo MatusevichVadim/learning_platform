@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { listLanguages } from '../api'
 import { useNavigate } from 'react-router-dom'
-import { t } from '../i18n'
+import UserCardButton from '../components/UserCardButton'
+import LeaderboardModal from '../components/LeaderboardModal'
 
 type Language = { id: string; name: string; image_url?: string }
 
 export default function LanguageSelect() {
   const [langs, setLangs] = useState<Language[]>([])
   const [userName, setUserName] = useState<string>(localStorage.getItem('user_name') || '')
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -22,14 +24,24 @@ export default function LanguageSelect() {
     <div className="container">
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h1 className="title" style={{ margin: 0 }}>{t('choose_language')}</h1>
-          <button 
-            className="btn" 
-            onClick={handleChangeName}
-            style={{ backgroundColor: '#6c757d', color: 'white', fontSize: '14px', padding: '8px 16px' }}
-          >
-            Поменять имя
-          </button>
+          <h1 className="title" style={{ margin: 0 }}>{'Выберите язык'}</h1>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <UserCardButton inline />
+            <button
+              className="btn"
+              onClick={() => setShowLeaderboard(true)}
+              style={{ backgroundColor: '#f39c12', color: '#000', fontSize: '14px', padding: '8px 16px' }}
+            >
+              Лидерборд
+            </button>
+            <button
+              className="btn"
+              onClick={handleChangeName}
+              style={{ backgroundColor: '#dc3545', color: 'white', fontSize: '14px', padding: '8px 16px' }}
+            >
+              Выход
+            </button>
+          </div>
         </div>
         <div style={{ 
           display: 'grid', 
@@ -103,12 +115,9 @@ export default function LanguageSelect() {
             </div>
           ))}
         </div>
-        <div style={{ textAlign: 'center' }}>
-          <button className="btn" onClick={() => navigate('/competition')} style={{ backgroundColor: '#28a745', color: 'white' }}>
-            Соревноваться
-          </button>
-        </div>
       </div>
+
+      {showLeaderboard && <LeaderboardModal onClose={() => setShowLeaderboard(false)} />}
     </div>
   )
 }

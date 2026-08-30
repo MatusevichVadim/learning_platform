@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { adminSubmissions, adminUsers } from '../../api'
+import { adminSubmissions, adminUsers, logout } from '../../api'
 import { useState as useS } from 'react'
 import axios from 'axios'
 import TasksTab from './TasksTab'
 import LessonsTab from './LessonsTab'
 import LanguagesTab from './LanguagesTab'
 import SubmissionsTab from './SubmissionsTab'
+import UsersTab from './UsersTab'
+import LeaderboardModal from '../../components/LeaderboardModal'
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
@@ -17,8 +19,9 @@ export default function AdminDashboard() {
   const [creator, setCreator] = useS<{ language: 'python'|'csharp'; lessonId?: number; type?: 'quiz'|'code'; title: string; description: string; options: string[]; correct?: string; tests: string }>({ language: 'python', title: '', description: '', options: ['', '', '', ''], tests: '' })
   const [updateTaskForm, setUpdateTaskForm] = useS({ id: 1, title: '', description: '', kind: 'quiz', test_spec: '' })
   const [view, setView] = useS<'add' | 'update'>('add')
-  const [section, setSection] = useS<'tasks' | 'lessons' | 'languages'>('languages')
+  const [section, setSection] = useS<'tasks' | 'lessons' | 'languages' | 'users'>('languages')
   const [adminTab, setAdminTab] = useS<'tables' | 'manage'>('tables')
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
 
   // Pagination and filtering state
   const [currentPage, setCurrentPage] = useState(1)
@@ -51,17 +54,21 @@ export default function AdminDashboard() {
 
   // Logout function
   function handleLogout() {
-    localStorage.removeItem('admin_token')
-    navigate('/admin/login')
+    logout().finally(() => navigate('/'))
   }
 
   return (
     <div className="container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h1>Админ панель</h1>
-        <button className="btn" onClick={handleLogout} style={{ backgroundColor: '#dc3545' }}>
-          Выйти
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => setShowLeaderboard(true)} style={{ backgroundColor: '#f39c12', color: '#000' }}>
+            Лидерборд
+          </button>
+          <button className="btn" onClick={handleLogout} style={{ backgroundColor: '#dc3545' }}>
+            Выйти
+          </button>
+        </div>
       </div>
       <div className="tabs" style={{ justifyContent: 'flex-start' }}>
         <button
@@ -130,6 +137,17 @@ export default function AdminDashboard() {
           >
             Задания
           </button>
+          <button
+            className="tab"
+            onClick={() => setSection('users')}
+            style={{
+              backgroundColor: section === 'users' ? '#3dd179' : '#101a2a',
+              color: section === 'users' ? '#092013' : '#e6edf3',
+              fontWeight: section === 'users' ? 'bold' : 'normal'
+            }}
+          >
+            Пользователи
+          </button>
         </div>
         {section === 'languages' && (
           <LanguagesTab />
@@ -170,9 +188,13 @@ export default function AdminDashboard() {
             <LessonsTab onSelectLesson={(id: number) => { setSection('tasks') }} />
           </div>
         )}
+        {section === 'users' && (
+          <UsersTab />
+        )}
         </div>
       )}
 
+      {showLeaderboard && <LeaderboardModal onClose={() => setShowLeaderboard(false)} />}
     </div>
   )
 }

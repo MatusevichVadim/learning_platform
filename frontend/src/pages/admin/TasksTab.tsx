@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { adminHeaders } from '../../api'
+import { authHeaders } from '../../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-type Task = { id: number; lesson_id: number; title: string; description: string; kind: string; test_spec?: string; order_index?: number }
+type Task = { id: number; lesson_id: number; title: string; description: string; kind: string; test_spec?: string; order_index?: number; rating?: number }
 type Lesson = { id: number; language: string; title: string; order_index: number }
 type Test = { input: string; output: string }
 
@@ -15,7 +15,7 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
   const [languages, setLanguages] = useState<Language[]>([])
   const [filterLang, setFilterLang] = useState<string>(() => localStorage.getItem('admin_lang') || 'python')
   const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [form, setForm] = useState<Task>({ id: 0, lesson_id: 1, title: '', description: '', kind: localStorage.getItem('last_task_kind') || 'quiz', test_spec: '' })
+  const [form, setForm] = useState<Task>({ id: 0, lesson_id: 1, title: '', description: '', kind: localStorage.getItem('last_task_kind') || 'quiz', test_spec: '', rating: 1 })
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null)
   const [quizOptions, setQuizOptions] = useState<Array<{ text: string; correct: boolean }>>([])
@@ -43,11 +43,11 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
   }, [initialSelectedLessonId])
 
   async function refresh() {
-    const res = await axios.get('/api/admin/tasks', { headers: adminHeaders() })
+    const res = await axios.get('/api/admin/tasks', { headers: authHeaders() })
     setTasks(res.data)
-    const ls = await axios.get('/api/admin/lessons', { headers: adminHeaders() })
+    const ls = await axios.get('/api/admin/lessons', { headers: authHeaders() })
     setLessons(ls.data)
-    const langs = await axios.get('/api/admin/languages', { headers: adminHeaders() })
+    const langs = await axios.get('/api/admin/languages', { headers: authHeaders() })
     setLanguages(langs.data)
   }
 
@@ -79,9 +79,9 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
 
   async function onSelect(id: number) {
     setSelectedId(id)
-    const res = await axios.get(`/api/admin/tasks/${id}`, { headers: adminHeaders() })
+    const res = await axios.get(`/api/admin/tasks/${id}`, { headers: authHeaders() })
     const t: Task = res.data
-    setForm({ id: t.id, lesson_id: t.lesson_id, title: t.title, description: t.description, kind: t.kind, test_spec: t.test_spec })
+    setForm({ id: t.id, lesson_id: t.lesson_id, title: t.title, description: t.description, kind: t.kind, test_spec: t.test_spec, rating: t.rating ?? 1 })
     setSelectedLessonId(t.lesson_id)
     setSelectedLessonForFilter(t.lesson_id)
     // parse quiz options if present
@@ -136,8 +136,8 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
     } else {
       testSpec = form.test_spec ? maybeParse(form.test_spec) : undefined
     }
-    const payload: any = { lesson_id: selectedLessonId, language: filterLang || 'python', title: form.title, description: form.description, kind: form.kind, test_spec: testSpec }
-    await axios.post(`/api/admin/tasks`, payload, { headers: adminHeaders() })
+    const payload: any = { lesson_id: selectedLessonId, language: filterLang || 'python', title: form.title, description: form.description, kind: form.kind, test_spec: testSpec, rating: Number(form.rating) || 1 }
+    await axios.post(`/api/admin/tasks`, payload, { headers: authHeaders() })
     localStorage.setItem('last_selected_lesson_id', selectedLessonId.toString())
     localStorage.setItem('last_task_kind', form.kind)
     await refresh()
@@ -168,7 +168,7 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
       }
       form.test_spec = JSON.stringify(testSpec)
     }
-    await axios.put(`/api/admin/tasks/${form.id}`, form, { headers: adminHeaders() })
+    await axios.put(`/api/admin/tasks/${form.id}`, form, { headers: authHeaders() })
     await refresh()
     if (selectedId) onSelect(selectedId)
     setShowSuccess(true)
@@ -179,7 +179,7 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
     if (!selectedId) return
     if (!confirm('Вы уверены, что хотите удалить это задание?')) return
     try {
-      await axios.delete(`/api/admin/tasks/${selectedId}`, { headers: adminHeaders() })
+      await axios.delete(`/api/admin/tasks/${selectedId}`, { headers: authHeaders() })
       await refresh()
       setSelectedId(null)
       setForm({ id: 0, lesson_id: selectedLessonId || 1, title: '', description: '', kind: localStorage.getItem('last_task_kind') || 'quiz', test_spec: '' })
@@ -198,7 +198,7 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
     try {
       // Map left/right to up/down for the API
       const apiDirection = direction === 'left' ? 'up' : 'down'
-      await axios.post(`/api/admin/tasks/${id}/move`, { direction: apiDirection }, { headers: adminHeaders() })
+      await axios.post(`/api/admin/tasks/${id}/move`, { direction: apiDirection }, { headers: authHeaders() })
       await refresh()
       if (selectedId) onSelect(selectedId)
     } catch (error) {
@@ -517,6 +517,16 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
               <input className="input" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
             </div>
             <div className="form-row full-row">
+              <label>Рейтинг задания (1–5)</label>
+              <select className="select" value={Number(form.rating) || 1} onChange={e => setForm({ ...form, rating: Number(e.target.value) })}>
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+                <option value={4}>4</option>
+                <option value={5}>5</option>
+              </select>
+            </div>
+            <div className="form-row full-row">
               <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 Описание
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -602,6 +612,16 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
             <div className="form-row full-row">
               <label>Заголовок</label>
               <input className="input" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+            </div>
+            <div className="form-row full-row">
+              <label>Рейтинг задания (1–5)</label>
+              <select className="select" value={Number(form.rating) || 1} onChange={e => setForm({ ...form, rating: Number(e.target.value) })}>
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+                <option value={4}>4</option>
+                <option value={5}>5</option>
+              </select>
             </div>
             <div className="form-row full-row">
               <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

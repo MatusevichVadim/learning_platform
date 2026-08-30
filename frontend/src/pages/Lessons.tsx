@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { listLessons, listLanguages } from '../api'
-import { t } from '../i18n'
 
 type Language = { id: string; name: string; image_url?: string }
 
@@ -65,7 +64,7 @@ export default function Lessons() {
               {'</>'}
             </div>
           )}
-          <h1 className="title" style={{ margin: 0 }}>{t('lessons')}: {langInfo?.name || language}</h1>
+          <h1 className="title" style={{ margin: 0 }}>{'Уроки'}: {langInfo?.name || language}</h1>
         </div>
         
         {/* Lessons list as cards */}

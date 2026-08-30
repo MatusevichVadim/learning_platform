@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { adminLogin } from '../../api'
+import { login } from '../api'
 
-export default function AdminLogin() {
+export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -10,22 +10,15 @@ export default function AdminLogin() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // Check if already logged in
-    const token = localStorage.getItem('admin_token')
-    if (token) {
-      // Verify token is still valid
-      fetch('/api/admin/users', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      .then(response => {
-        if (response.ok) {
-          navigate('/admin')
-        }
-      })
-      .catch(() => {
-        // Token invalid, remove it
-        localStorage.removeItem('admin_token')
-      })
+    // If already logged in, redirect appropriately.
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr)
+        navigate(user.role === 'admin' ? '/admin' : '/', { replace: true })
+      } catch {
+        localStorage.removeItem('user')
+      }
     }
   }, [navigate])
 
@@ -34,8 +27,9 @@ export default function AdminLogin() {
     setLoading(true)
     setError('')
     try {
-      await adminLogin(username, password)
-      navigate('/admin')
+      const data = await login(username, password)
+      const role = data.user?.role ?? data.role
+      navigate(role === 'admin' ? '/admin' : '/', { replace: true })
     } catch (err: any) {
       setError('Неверный логин или пароль')
     } finally {
@@ -46,7 +40,7 @@ export default function AdminLogin() {
   return (
     <div className="container">
       <div className="card">
-        <h1 className="title">Админ вход</h1>
+        <h1 className="title">Вход</h1>
         <form onSubmit={onSubmit}>
           <input className="input" value={username} onChange={e => setUsername(e.target.value)} placeholder="Логин" autoComplete="off" />
           <input className="input" value={password} onChange={e => setPassword(e.target.value)} placeholder="Пароль" type="password" style={{ marginTop: 8 }} autoComplete="off" />
@@ -59,5 +53,3 @@ export default function AdminLogin() {
     </div>
   )
 }
-
-

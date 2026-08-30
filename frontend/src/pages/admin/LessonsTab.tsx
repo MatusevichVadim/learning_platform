@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { adminHeaders } from '../../api'
+import { authHeaders } from '../../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -34,10 +34,10 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
   }, [additionalInfo])
 
   async function refresh() {
-    const res = await axios.get('/api/admin/lessons', { headers: adminHeaders() })
+    const res = await axios.get('/api/admin/lessons', { headers: authHeaders() })
     setLessons(res.data)
     // fetch task counts per lesson
-    const countsRes = await axios.get('/api/admin/tasks', { headers: adminHeaders() })
+    const countsRes = await axios.get('/api/admin/tasks', { headers: authHeaders() })
     const counts: Record<number, number> = {}
     for (const task of countsRes.data) {
       counts[task.lesson_id] = (counts[task.lesson_id] || 0) + 1
@@ -45,12 +45,12 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
     setTaskCounts(counts)
 
     // fetch languages
-    const langsRes = await axios.get('/api/admin/languages', { headers: adminHeaders() })
+    const langsRes = await axios.get('/api/admin/languages', { headers: authHeaders() })
     setLanguages(langsRes.data)
   }
 
   async function create() {
-    await axios.post('/api/admin/lessons', form, { headers: adminHeaders() })
+    await axios.post('/api/admin/lessons', form, { headers: authHeaders() })
     setForm({ language: 'python', title: '' })
     await refresh()
   }
@@ -58,7 +58,7 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
   async function remove(id: number) {
     if (!confirm('Удалить урок и все его задания?')) return
     try {
-      await axios.delete(`/api/admin/lessons/${id}`, { headers: adminHeaders() })
+      await axios.delete(`/api/admin/lessons/${id}`, { headers: authHeaders() })
       await refresh()
     } catch (error) {
       console.error('Failed to delete lesson:', error)
@@ -73,7 +73,7 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
 
   async function saveTitle(lessonId: number) {
     try {
-      await axios.put(`/api/admin/lessons/${lessonId}`, { title: editingLessonTitle }, { headers: adminHeaders() })
+      await axios.put(`/api/admin/lessons/${lessonId}`, { title: editingLessonTitle }, { headers: authHeaders() })
       setEditingLessonId(null)
       setEditingLessonTitle('')
       await refresh()
@@ -90,7 +90,7 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
 
   async function moveLesson(lessonId: number, direction: 'up' | 'down') {
     try {
-      await axios.post(`/api/admin/lessons/${lessonId}/move`, { direction }, { headers: adminHeaders() })
+      await axios.post(`/api/admin/lessons/${lessonId}/move`, { direction }, { headers: authHeaders() })
       await refresh()
     } catch (error) {
       console.error('Failed to move lesson:', error)
@@ -100,7 +100,7 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
   async function startEditAdditionalInfo(lessonId: number) {
     try {
       const response = await axios.get(`/api/admin/lessons/${lessonId}/additional-info`, {
-        headers: adminHeaders()
+        headers: authHeaders()
       })
       setAdditionalInfo(response.data.additional_info || '')
       setEditingAdditionalInfoLessonId(lessonId)
@@ -118,7 +118,7 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
       await axios.put(`/api/admin/lessons/${editingAdditionalInfoLessonId}/additional-info`, {
         additional_info: additionalInfo
       }, {
-        headers: adminHeaders()
+        headers: authHeaders()
       })
       // Success - no alert needed
       setEditingAdditionalInfoLessonId(null)

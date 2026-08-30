@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { adminHeaders } from '../../api'
+import { authHeaders } from '../../api'
+import { formatDateTime } from '../../utils/date'
 
 type PendingSubmission = {
   id: number
@@ -25,7 +26,7 @@ export default function PendingReview() {
 
   async function loadPendingSubmissions() {
     try {
-      const res = await axios.get('/api/admin/submissions/pending', { headers: adminHeaders() })
+      const res = await axios.get('/api/admin/submissions/pending', { headers: authHeaders() })
       setSubmissions(res.data)
     } catch (error) {
       console.error('Failed to load pending submissions:', error)
@@ -38,7 +39,7 @@ export default function PendingReview() {
       await axios.post(`/api/admin/submissions/${submissionId}/review`, {
         is_correct: isCorrect,
         comment: comment
-      }, { headers: adminHeaders() })
+      }, { headers: authHeaders() })
       
       // Remove reviewed submission from list
       setSubmissions(prev => prev.filter(s => s.id !== submissionId))
@@ -292,7 +293,7 @@ export default function PendingReview() {
                     padding: '12px 16px',
                     color: '#ffffff',
                     fontSize: '14px'
-                  }}>{(() => { const d = new Date(submission.created_at); return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) + ' ' + d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }); })()}</td>
+                  }}>{formatDateTime(submission.created_at)}</td>
                   <td style={{
                     padding: '12px 16px'
                   }}>

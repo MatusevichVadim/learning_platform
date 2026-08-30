@@ -1,56 +1,30 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..auth import create_access_token, decode_token
-from ..db import get_session
 from ..models import Language, Lesson, Task, Submission, User
 from ..checker import run_python_tests
-from ..schemas import UserCreate, UserOut, LessonOut, TaskOut, SubmitQuiz, SubmitCode, SubmissionOut
+from ..rating import recompute_user_rating, effective_rating
+from ..schemas import UserOut, LessonOut, TaskOut, SubmitQuiz, SubmitCode, SubmissionOut
+from ..deps import get_current_user, get_db
 
 
 router = APIRouter(tags=["public"])
 
 
-def get_db() -> Session:
-    with get_session() as session:
-        yield session
-
-
 @router.post("/enter")
-def enter_user(payload: UserCreate, db: Session = Depends(get_db)):
-    user = User(name=payload.name, is_admin=False)
-    db.add(user)
-    db.flush()
-    token = create_access_token({"sub": str(user.id), "role": "user"})
-    return {"user": {"id": user.id, "name": user.name, "is_admin": user.is_admin, "created_at": user.created_at}, "access_token": token, "token_type": "bearer"}
-
-
 @router.post("/token")
-def get_user_token(user_id: int, db: Session = Depends(get_db)):
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    token = create_access_token({"sub": str(user.id), "role": "admin" if user.is_admin else "user"})
-    return {"access_token": token, "token_type": "bearer"}
-
-
-def get_current_user(authorization: Annotated[str | None, Header()] = None, db: Session = Depends(get_db)) -> User:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    token = authorization.split(" ", 1)[1]
-    payload = decode_token(token)
-    user_id = int(payload.get("sub"))
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid user")
-    return user
+def deprecated_legacy_endpoints():
+    from fastapi import HTTPException, status
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="This endpoint is deprecated. Use /api/auth/login to authenticate.",
+    )
 
 
 @router.get("/languages")
@@ -91,12 +65,12 @@ def lesson_status(lesson_id: int, user: User = Depends(get_current_user), db: Se
     latest: dict[int, bool | None] = {}
     for s in subs:
         if s.task_id not in latest:
-            # If submission is pending, return None (not completed)
             if s.status == "pending":
                 latest[s.task_id] = None
             else:
                 latest[s.task_id] = s.is_correct
     return {str(k): latest.get(k, None) for k in task_ids}
+
 
 @router.get("/lessons/{lesson_id}/additional-info")
 def get_lesson_additional_info_public(lesson_id: int, db: Session = Depends(get_db)):
@@ -105,18 +79,18 @@ def get_lesson_additional_info_public(lesson_id: int, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="Lesson not found")
     return {"additional_info": lesson.additional_info or ""}
 
+
 @router.get("/tasks/{task_id}/submission")
 def get_task_submission(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Get the latest submission for this user and task
     submission = db.execute(
         select(Submission)
         .where(Submission.user_id == user.id, Submission.task_id == task_id)
         .order_by(Submission.created_at.desc())
     ).scalars().first()
-    
+
     if not submission:
         return None
-    
+
     return {
         "id": submission.id,
         "is_correct": submission.is_correct,
@@ -124,6 +98,7 @@ def get_task_submission(task_id: int, user: User = Depends(get_current_user), db
         "status": getattr(submission, 'status', 'completed'),
         "created_at": submission.created_at,
     }
+
 
 @router.get("/progress")
 def get_my_progress(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -148,51 +123,8 @@ def submit_quiz(task_id: int, payload: SubmitQuiz, user: User = Depends(get_curr
     submission = Submission(user_id=user.id, task_id=task.id, answer=payload.answer, is_correct=is_correct, result="correct" if is_correct else "incorrect")
     db.add(submission)
     db.flush()
+    recompute_user_rating(db, user.id)
     return submission
-
-
-@router.post("/tasks/{task_id}/record-test-success")
-def record_test_success(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Record that user successfully passed all tests for a task"""
-    task = db.get(Task, task_id)
-    if not task or task.kind != "code":
-        raise HTTPException(status_code=404, detail="Task not found or not a code task")
-
-    # Check if user already has a successful test record for this task
-    existing_record = db.execute(
-        select(Submission)
-        .where(Submission.user_id == user.id, Submission.task_id == task_id)
-        .where(Submission.result.like("%AUTO_TEST_SUCCESS%"))
-    ).scalars().first()
-
-    if existing_record:
-        # Update existing record with current timestamp
-        existing_record.created_at = datetime.utcnow()
-        db.commit()
-        return {"message": "Test success record updated", "id": existing_record.id}
-
-    # Create new test success record
-    test_record = Submission(
-        user_id=user.id,
-        task_id=task.id,
-        code="AUTO_TEST_SUCCESS: All tests passed locally",
-        is_correct=True,
-        result="Все тесты пройдены успешно (локально)",
-        status="completed"
-    )
-    db.add(test_record)
-    db.flush()
-
-    return {
-        "message": "Test success recorded",
-        "id": test_record.id,
-        "user_id": test_record.user_id,
-        "task_id": test_record.task_id,
-        "is_correct": test_record.is_correct,
-        "result": test_record.result,
-        "created_at": test_record.created_at,
-        "status": test_record.status,
-    }
 
 
 @router.post("/tasks/{task_id}/submit-code", response_model=SubmissionOut)
@@ -201,56 +133,61 @@ def submit_code(task_id: int, payload: SubmitCode, user: User = Depends(get_curr
     if not task or task.kind != "code":
         raise HTTPException(status_code=404, detail="Task not found or not a code task")
 
-    # Check if this is an auto-completed submission (from successful test run)
-    is_auto_completed = "# AUTO_COMPLETED:" in payload.code
+    # Execute the user's code in the isolated sandbox and grade it server-side.
+    # The client cannot influence the outcome (no trusted markers).
+    ok, result = run_python_tests(payload.code, task.test_spec or "{}")
+    passed = isinstance(result, dict) and result.get("ok") is True
 
-    if is_auto_completed:
-        # Auto-confirm the submission as correct
-        submission = Submission(
-            user_id=user.id,
-            task_id=task.id,
-            code=payload.code,
-            is_correct=True,
-            result="Задача выполнена автоматически - все тесты пройдены",
-            status="completed"
-        )
+    if passed:
+        is_correct = True
+        status_val = "completed"
+        stored_result = "Все тесты пройдены успешно"
+        response_result = result
     else:
-        # Create pending submission for manual review
-        submission = Submission(
-            user_id=user.id,
-            task_id=task.id,
-            code=payload.code,
-            is_correct=False,  # Will be set by admin
-            result="Ожидает проверки администратором",
-            status="pending"
-        )
+        is_correct = False
+        status_val = "pending"
+        stored_result = "Ожидает проверки администратором"
+        response_result = {"message": "Ваше решение отправлено на проверку администратору"}
 
+    submission = Submission(
+        user_id=user.id,
+        task_id=task.id,
+        code=payload.code,
+        is_correct=is_correct,
+        result=stored_result,
+        status=status_val,
+    )
     db.add(submission)
     db.flush()
+    recompute_user_rating(db, user.id)
 
-    # Return appropriate response
-    if is_auto_completed:
-        response = {
-            "id": submission.id,
-            "user_id": submission.user_id,
-            "task_id": submission.task_id,
-            "code": submission.code,
-            "is_correct": submission.is_correct,
-            "result": {"message": "Задача выполнена успешно - все тесты пройдены!"},
-            "created_at": submission.created_at,
-            "status": submission.status,
+    return {
+        "id": submission.id,
+        "user_id": submission.user_id,
+        "task_id": submission.task_id,
+        "code": submission.code,
+        "is_correct": submission.is_correct,
+        "result": response_result,
+        "created_at": submission.created_at,
+        "status": submission.status,
+    }
+
+
+@router.get("/leaderboard")
+def leaderboard(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Return all users ordered by their effective rating (computed + bonus), descending.
+
+    Each entry contains the user id, username, full name (ФИО) and the effective rating.
+    """
+    from sqlalchemy import desc as _desc
+    users = db.execute(select(User).order_by(_desc(User.rating + User.rating_bonus))).scalars().all()
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "full_name": u.full_name or u.username,
+            "rating": effective_rating(u),
+            "rating_bonus": u.rating_bonus or 0,
         }
-    else:
-        response = {
-            "id": submission.id,
-            "user_id": submission.user_id,
-            "task_id": submission.task_id,
-            "code": submission.code,
-            "is_correct": submission.is_correct,
-            "result": {"message": "Ваше решение отправлено на проверку администратору"},
-            "created_at": submission.created_at,
-            "status": submission.status,
-        }
-    return response
-
-
+        for u in users
+    ]

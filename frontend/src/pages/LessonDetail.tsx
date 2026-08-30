@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { listTasks, submitQuiz, submitCode, lessonStatus, getTaskSubmission, getLesson } from '../api'
-import { t } from '../i18n'
+
 import CodeInterpreter from '../components/CodeInterpreter'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import UserCardButton from '../components/UserCardButton'
 
 type Task = { id: number; title: string; description: string; kind: string; test_spec?: string }
 
@@ -257,12 +258,15 @@ export default function LessonDetail() {
         >
           ← Назад к урокам
         </button>
-        <button
-          className="btn"
-          onClick={() => setShowInfoModal(true)}
-        >
-          Дополнительная информация
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <UserCardButton inline />
+          <button
+            className="btn"
+            onClick={() => setShowInfoModal(true)}
+          >
+            Дополнительная информация
+          </button>
+        </div>
       </div>
       <div className="card">
         <h1 className="title">{lessonInfo?.title || 'Название урока'}</h1>
@@ -411,7 +415,7 @@ export default function LessonDetail() {
           )}
           <div className="row" style={{ marginTop: 8, justifyContent: 'space-between' }}>
             {task.kind === 'code' && (
-              <button className="btn" onClick={() => onSubmit(task)}>{t('submit')}</button>
+              <button className="btn" onClick={() => onSubmit(task)}>{'Отправить'}</button>
             )}
             {status[task.id] !== undefined && status[task.id] !== null && (
               <span style={{ color: status[task.id] ? '#3dd179' : '#a9b1bb' }}>

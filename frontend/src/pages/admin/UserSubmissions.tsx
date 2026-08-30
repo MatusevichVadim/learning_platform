@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { adminHeaders, getTask } from '../../api'
+import { authHeaders, getTask } from '../../api'
 import { useParams, useNavigate } from 'react-router-dom'
+import CardChart from '../../components/CardChart'
+import { formatDateTime } from '../../utils/date'
 
 type Submission = {
   id: number
   user_name: string
   lesson_id: number
   lesson_title: string
+  language: string
   task_id: number
   task_title: string
   is_correct: boolean
@@ -20,6 +23,9 @@ type Submission = {
 export default function UserSubmissions() {
   const { userName } = useParams<{ userName: string }>()
   const navigate = useNavigate()
+  const me = JSON.parse(localStorage.getItem('user') || '{}')
+  const isAdmin = me?.role === 'admin'
+  const myName = me?.username
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState<number | null>(null)
@@ -30,11 +36,21 @@ export default function UserSubmissions() {
   const [loading, setLoading] = useState(false)
   const [copiedCode, setCopiedCode] = useState(false)
 
+  // Non-admin users may only view their own card.
+  useEffect(() => {
+    if (!isAdmin) {
+      const target = decodeURIComponent(userName || '')
+      if (!myName || target !== myName) {
+        navigate(myName ? `/admin/user/${encodeURIComponent(myName)}/submissions` : '/profile', { replace: true })
+      }
+    }
+  }, [userName, isAdmin, myName, navigate])
+
   useEffect(() => { refresh() }, [page, userName])
 
   async function refresh() {
     if (!userName) return
-    const res = await axios.get('/api/admin/submissions', { headers: adminHeaders(), params: { user_name: decodeURIComponent(userName), page, page_size: pageSize } })
+    const res = await axios.get('/api/admin/submissions', { headers: authHeaders(), params: { user_name: decodeURIComponent(userName), page, page_size: pageSize } })
     setSubmissions(res.data.data)
     setTotal(res.data.total)
     setPageSize(res.data.page_size)
@@ -51,7 +67,7 @@ export default function UserSubmissions() {
       await axios.post(`/api/admin/submissions/${submissionId}/review`, {
         is_correct: isCorrect,
         comment: comment
-      }, { headers: adminHeaders() })
+      }, { headers: authHeaders() })
 
       // Update the submission status locally
       setSubmissions(prev => prev.map(s =>
@@ -74,7 +90,7 @@ export default function UserSubmissions() {
 
     // Fetch task details
     try {
-      const res = await axios.get(`/api/admin/tasks/${submission.task_id}`, { headers: adminHeaders() })
+      const res = await axios.get(`/api/admin/tasks/${submission.task_id}`, { headers: authHeaders() })
       const taskData = res.data
       setTaskDescription(taskData.description || 'Описание не найдено')
       // Store task title if available
@@ -119,12 +135,16 @@ export default function UserSubmissions() {
           <h3>Результаты пользователя: {decodeURIComponent(userName || '')}</h3>
           <button
             className="btn"
-            onClick={() => navigate('/admin')}
+            onClick={() => navigate(isAdmin ? '/admin' : '/profile')}
             style={{ backgroundColor: '#6c757d' }}
           >
-            ← Назад к админ панели
+            {isAdmin ? '← Назад к админ панели' : '← Назад в кабинет'}
           </button>
         </div>
+
+        <h4 style={{ margin: '0 0 8px' }}>{'График активности'}</h4>
+        <CardChart submissions={submissions} />
+
         <table style={{
           width: '100%',
           backgroundColor: '#1a1a2e',
@@ -253,7 +273,7 @@ export default function UserSubmissions() {
                 padding: '12px 16px',
                 color: '#ffffff',
                 fontSize: '14px'
-              }}>{(() => { const d = new Date(s.created_at); return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) + ' ' + d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }); })()}</td>
+              }}>{formatDateTime(s.created_at)}</td>
             </tr>
           ))}
         </tbody>

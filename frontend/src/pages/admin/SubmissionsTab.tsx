@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { adminHeaders, getTask } from '../../api'
+import { authHeaders, getTask } from '../../api'
 import { useNavigate } from 'react-router-dom'
+import { formatDateTime } from '../../utils/date'
 
 type Submission = {
   id: number
   user_name: string
   lesson_id: number
   lesson_title: string
+  language?: string
   task_id: number
   task_title: string
   is_correct: boolean
@@ -33,7 +35,7 @@ export default function SubmissionsTab() {
   useEffect(() => { refresh() }, [page])
 
   async function refresh() {
-    const res = await axios.get('/api/admin/submissions', { headers: adminHeaders(), params: { page, page_size: pageSize } })
+    const res = await axios.get('/api/admin/submissions', { headers: authHeaders(), params: { page, page_size: pageSize } })
     setSubmissions(res.data.data)
     setTotal(res.data.total)
     setPageSize(res.data.page_size)
@@ -56,7 +58,7 @@ export default function SubmissionsTab() {
       await axios.post(`/api/admin/submissions/${submissionId}/review`, {
         is_correct: isCorrect,
         comment: comment
-      }, { headers: adminHeaders() })
+      }, { headers: authHeaders() })
 
       // Update the submission status locally
       setSubmissions(prev => prev.map(s =>
@@ -81,7 +83,7 @@ export default function SubmissionsTab() {
 
     // Fetch task details
     try {
-      const res = await axios.get(`/api/admin/tasks/${submission.task_id}`, { headers: adminHeaders() })
+      const res = await axios.get(`/api/admin/tasks/${submission.task_id}`, { headers: authHeaders() })
       const taskData = res.data
       setTaskDescription(taskData.description || 'Описание не найдено')
       // Store task title if available
@@ -277,7 +279,7 @@ export default function SubmissionsTab() {
                 padding: '12px 16px',
                 color: '#ffffff',
                 fontSize: '14px'
-              }}>{(() => { const d = new Date(s.created_at); return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) + ' ' + d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }); })()}</td>
+              }}>{formatDateTime(s.created_at)}</td>
             </tr>
           ))}
         </tbody>

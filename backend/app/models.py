@@ -11,11 +11,20 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(100), unique=False, index=True)
-    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    role: Mapped[str] = mapped_column(String(20), default="user", nullable=False)  # "admin" | "user"
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    # Legacy column kept for backward compatibility with existing DB
+    name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Rating system: `rating` is computed automatically from solved tasks + streaks,
+    # `rating_bonus` is a manual adjustment applied by an administrator.
+    rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    submissions: Mapped[list[Submission]] = relationship("Submission", back_populates="user")
+    submissions: Mapped[list[Submission]] = relationship("Submission", back_populates="user", cascade="all, delete-orphan")
 
 
 class Language(Base):
@@ -54,6 +63,8 @@ class Task(Base):
     kind: Mapped[str] = mapped_column(String(20))  # "quiz" | "code"
     test_spec: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string or plain
     order_index: Mapped[int] = mapped_column(Integer, default=0)  # For ordering tasks within a lesson
+    # Rating (1-5) awarded to a user when this task is solved correctly.
+    rating: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     lesson: Mapped[Lesson] = relationship("Lesson", back_populates="tasks")
     submissions: Mapped[list[Submission]] = relationship("Submission", back_populates="task")
@@ -63,8 +74,8 @@ class Submission(Base):
     __tablename__ = "submissions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=False)
     answer: Mapped[str | None] = mapped_column(Text, nullable=True)  # for quiz
     code: Mapped[str | None] = mapped_column(Text, nullable=True)  # for code tasks
     is_correct: Mapped[bool] = mapped_column(Boolean, default=False)

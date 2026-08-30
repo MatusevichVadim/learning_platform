@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import axios from 'axios'
-import { adminHeaders } from '../../api'
+import { authHeaders } from '../../api'
 
 type Language = { id: string; name: string; is_custom: boolean; image_url?: string }
 
@@ -15,7 +15,7 @@ export default function LanguagesTab() {
   useEffect(() => { refresh() }, [])
 
   async function refresh() {
-    const res = await axios.get('/api/admin/languages', { headers: adminHeaders() })
+    const res = await axios.get('/api/admin/languages', { headers: authHeaders() })
     console.log('Languages data:', res.data)
     setLanguages(res.data)
   }
@@ -26,7 +26,7 @@ export default function LanguagesTab() {
       return
     }
     try {
-      await axios.post('/api/admin/languages', form, { headers: adminHeaders() })
+      await axios.post('/api/admin/languages', form, { headers: authHeaders() })
       setForm({ id: '', name: '', image_url: '' })
       await refresh()
     } catch (error: any) {
@@ -37,7 +37,7 @@ export default function LanguagesTab() {
   async function remove(id: string) {
     if (!confirm('Удалить язык и все его уроки?')) return
     try {
-      await axios.delete(`/api/admin/languages/${id}`, { headers: adminHeaders() })
+      await axios.delete(`/api/admin/languages/${id}`, { headers: authHeaders() })
       await refresh()
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Ошибка при удалении языка')
@@ -51,7 +51,7 @@ export default function LanguagesTab() {
 
   async function saveEdit(id: string) {
     try {
-      await axios.put(`/api/admin/languages/${id}`, editForm, { headers: adminHeaders() })
+      await axios.put(`/api/admin/languages/${id}`, editForm, { headers: authHeaders() })
       setEditingId(null)
       await refresh()
     } catch (error: any) {
@@ -74,7 +74,7 @@ export default function LanguagesTab() {
     try {
       const response = await axios.post(`/api/admin/languages/${langId}/upload-image`, formData, {
         headers: {
-          ...adminHeaders(),
+          ...authHeaders(),
           'Content-Type': 'multipart/form-data'
         }
       })

@@ -1,45 +1,54 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { api } from '../api'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
 }
 
+type AuthStatus = 'loading' | 'ok' | 'no-auth' | 'no-admin'
+
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+  const [status, setStatus] = useState<AuthStatus>('loading')
 
   useEffect(() => {
-    const token = localStorage.getItem('admin_token')
+    const userStr = localStorage.getItem('user')
 
-    if (!token) {
-      setIsAuthenticated(false)
+    if (!userStr) {
+      setStatus('no-auth')
       return
     }
 
-    // Verify token by making a test API call
-    fetch('/api/admin/users', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    })
-    .then(response => {
-      if (response.ok) {
-        setIsAuthenticated(true)
-      } else {
-        // Token is invalid, remove it
-        localStorage.removeItem('admin_token')
-        setIsAuthenticated(false)
-      }
-    })
-    .catch(() => {
-      // Network error or invalid token
-      localStorage.removeItem('admin_token')
-      setIsAuthenticated(false)
-    })
+    let storedUser: { role?: string } | null = null
+    try {
+      storedUser = JSON.parse(userStr)
+    } catch {
+      localStorage.removeItem('user')
+      setStatus('no-auth')
+      return
+    }
+
+    // Fallback to stored role; verify with the backend /api/auth/me endpoint.
+    if (storedUser?.role !== 'admin') {
+      setStatus('no-admin')
+      return
+    }
+
+    api.get('/auth/me')
+      .then((res) => {
+        if (res.data?.role === 'admin') {
+          setStatus('ok')
+        } else {
+          setStatus('no-admin')
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem('user')
+        setStatus('no-auth')
+      })
   }, [])
 
-  // Show loading while checking authentication
-  if (isAuthenticated === null) {
+  if (status === 'loading') {
     return (
       <div className="container">
         <div className="card">
@@ -51,11 +60,13 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     )
   }
 
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
-    return <Navigate to="/admin/login" replace />
+  if (status === 'no-auth') {
+    return <Navigate to="/login" replace />
   }
 
-  // Render protected content if authenticated
+  if (status === 'no-admin') {
+    return <Navigate to="/" replace />
+  }
+
   return <>{children}</>
 }

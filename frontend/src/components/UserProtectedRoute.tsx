@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { api } from '../api'
 
 interface UserProtectedRouteProps {
   children: React.ReactNode
@@ -9,16 +10,20 @@ export default function UserProtectedRoute({ children }: UserProtectedRouteProps
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    const user = localStorage.getItem('user')
+    const userStr = localStorage.getItem('user')
 
-    if (!token || !user) {
+    if (!userStr) {
       setIsAuthenticated(false)
       return
     }
 
-    // User has token and user data, consider authenticated
-    setIsAuthenticated(true)
+    // Verify the session via the httpOnly cookie by calling /auth/me.
+    api.get('/auth/me')
+      .then(() => setIsAuthenticated(true))
+      .catch(() => {
+        localStorage.removeItem('user')
+        setIsAuthenticated(false)
+      })
   }, [])
 
   // Show loading while checking authentication

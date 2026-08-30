@@ -13,9 +13,12 @@ build/
 .pytest_cache/
 *.egg
 projectInfo.md
+.env
 
 # Backend
 backend_data.sqlite3
+*.sqlite3
+temp_passwords.txt
 
 # Frontend
 frontend/node_modules/

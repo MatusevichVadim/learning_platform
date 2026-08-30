@@ -5,9 +5,10 @@ import Home from './pages/Home'
 import LanguageSelect from './pages/LanguageSelect'
 import Lessons from './pages/Lessons'
 import LessonDetail from './pages/LessonDetail'
-import AdminLogin from './pages/admin/AdminLogin'
+import Login from './pages/Login'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import UserSubmissions from './pages/admin/UserSubmissions'
+import Profile from './pages/Profile'
 import ProtectedRoute from './components/ProtectedRoute'
 import UserProtectedRoute from './components/UserProtectedRoute'
 
@@ -37,7 +38,15 @@ const router = createBrowserRouter([
       </UserProtectedRoute>
     )
   },
-  { path: '/admin/login', element: <AdminLogin /> },
+  {
+    path: '/profile',
+    element: (
+      <UserProtectedRoute>
+        <Profile />
+      </UserProtectedRoute>
+    )
+  },
+  { path: '/login', element: <Login /> },
   {
     path: '/admin',
     element: (
@@ -49,9 +58,9 @@ const router = createBrowserRouter([
   {
     path: '/admin/user/:userName/submissions',
     element: (
-      <ProtectedRoute>
+      <UserProtectedRoute>
         <UserSubmissions />
-      </ProtectedRoute>
+      </UserProtectedRoute>
     )
   },
 ])
@@ -61,5 +70,3 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <RouterProvider router={router} />
   </React.StrictMode>
 )
-
-
