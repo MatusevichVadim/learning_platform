@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 3000",
+    "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
-    "preview": "vite preview --port 3000"
+    "preview": "vite preview --port 5173"
   },
   "dependencies": {
     "@codemirror/lang-java": "^6.0.2",

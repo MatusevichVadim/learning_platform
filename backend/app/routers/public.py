@@ -180,7 +180,12 @@ def leaderboard(user: User = Depends(get_current_user), db: Session = Depends(ge
     Each entry contains the user id, username, full name (ФИО) and the effective rating.
     """
     from sqlalchemy import desc as _desc
-    users = db.execute(select(User).order_by(_desc(User.rating + User.rating_bonus))).scalars().all()
+    # Only active (non-blocked) non-admin users appear in the leaderboard.
+    users = db.execute(
+        select(User)
+        .where(User.is_active.is_(True), User.role != "admin")
+        .order_by(_desc(User.rating + User.rating_bonus))
+    ).scalars().all()
     return [
         {
             "id": u.id,

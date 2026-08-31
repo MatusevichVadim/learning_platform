@@ -60,7 +60,7 @@ export async function getLesson(lessonId: number) {
 
 export async function listTasks(lessonId: number) {
   const res = await api.get(`/lessons/${lessonId}/tasks`)
-  return res.data as Array<{ id: number; title: string; description: string; kind: string }>
+  return res.data as Array<{ id: number; title: string; description: string; kind: string; rating?: number }>
 }
 
 export async function getTask(taskId: number) {

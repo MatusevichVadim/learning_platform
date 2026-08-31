@@ -7,7 +7,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import UserCardButton from '../components/UserCardButton'
 
-type Task = { id: number; title: string; description: string; kind: string; test_spec?: string }
+type Task = { id: number; title: string; description: string; kind: string; test_spec?: string; rating?: number }
 
 type LessonInfo = { id: number; title: string; order_index: number }
 
@@ -299,7 +299,10 @@ export default function LessonDetail() {
 
         {tasks.map((task, idx) => (
         <div key={task.id} style={{ display: idx === activeIdx ? 'block' : 'none' }}>
-          <h3>{task.title}</h3>
+          <h3 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {task.title}
+            <span style={{ fontSize: 16, color: '#f1c40f' }}>{'★'.repeat(task.rating ?? 1)}</span>
+          </h3>
           <div style={{ color: '#e6edf3', lineHeight: '1.6', marginBottom: '16px' }}>
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}

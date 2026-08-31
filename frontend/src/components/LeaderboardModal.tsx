@@ -71,8 +71,9 @@ export default function LeaderboardModal({ onClose }: { onClose: () => void }) {
                         {e.full_name || e.username}
                         {isMe && <span style={{ marginLeft: 8, fontSize: 12, color: '#f39c12' }}>{' (вы)'}</span>}
                       </td>
-                      <td style={{ padding: 10 }}>
+                      <td style={{ padding: 10, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                         <span style={{ fontWeight: 700, color: isMe ? '#f39c12' : '#f39c12' }}>{e.rating}</span>
+                        <span style={{ fontSize: 16, color: '#f1c40f' }}>★</span>
                       </td>
                     </tr>
                   )
