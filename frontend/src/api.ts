@@ -1,10 +1,15 @@
 import axios from 'axios'
 
+// Base URL for the backend API. In the dev server it is proxied from /api,
+// in production it is served from the same domain (via nginx) or from a
+// VITE_API_BASE environment variable when building for a remote host.
+const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
+
 // Send cookies (the auth token is stored in an httpOnly cookie, not localStorage)
 // on every request, including raw `axios.*` calls used across the admin pages.
 axios.defaults.withCredentials = true
 
-export const api = axios.create({ baseURL: '/api', withCredentials: true })
+export const api = axios.create({ baseURL: API_BASE, withCredentials: true })
 
 // Response interceptor to handle 401 errors
 api.interceptors.response.use(

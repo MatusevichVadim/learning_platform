@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { formatDate } from '../utils/date'
+import { formatDate, DISPLAY_TIME_OFFSET_MS } from '../utils/date'
 
 export type CardChartSubmission = {
   id: number
@@ -59,7 +59,7 @@ function groupOf(s: CardChartSubmission, group: GroupKey): { key: string; label:
       return { key: label, label }
     }
     case 'date': {
-      const d = new Date(s.created_at)
+      const d = new Date(new Date(s.created_at).getTime() + DISPLAY_TIME_OFFSET_MS)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       return { key, label: formatDate(d) }
     }

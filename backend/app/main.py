@@ -19,10 +19,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Learning Platform", version="0.1.0", lifespan=lifespan)
 
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+# CORS origins can be set via ALLOWED_ORIGINS env var (comma separated).
+# Defaults cover local Vite dev server. Override for production (e.g. your domain).
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=[o.strip() for o in ALLOWED_ORIGINS if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { adminUsers, adminUserCard, createUser, resetUserPassword, toggleUserStatus, updateUser, deleteUser } from '../../api'
 import CardChart from '../../components/CardChart'
 import LessonProgress from '../../components/LessonProgress'
-import { formatDate } from '../../utils/date'
+import { formatDateTime } from '../../utils/date'
 
 type User = {
   id: number
@@ -244,7 +244,7 @@ export default function UsersTab() {
                 <td style={{ padding: 10 }}>
                   <span style={{ fontWeight: 700, color: '#f39c12' }}>{(user.rating ?? 0) + (user.rating_bonus ?? 0)}</span>
                 </td>
-                <td style={{ padding: 10 }}>{formatDate(user.created_at)}</td>
+                <td style={{ padding: 10 }}>{formatDateTime(user.created_at)}</td>
                 <td style={{ padding: 10 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -370,7 +370,7 @@ export default function UsersTab() {
                   {cardData.user.username} · {cardData.user.role === 'admin' ? 'Администратор' : 'Пользователь'} ·{' '}
                   <span style={{ color: cardData.user.is_active ? '#3dd179' : '#dc3545' }}>{cardData.user.is_active ? 'Активен' : 'Заблокирован'}</span>
                 </div>
-                <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>{'Регистрация: '}{formatDate(cardData.user.created_at)}</div>
+                <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>{'Регистрация: '}{formatDateTime(cardData.user.created_at)}</div>
               </div>
               <button onClick={() => setCardData(null)} style={{ background: 'none', border: 'none', color: '#a9b1bb', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
@@ -447,7 +447,7 @@ export default function UsersTab() {
                       <td style={{ padding: 8, color: s.status === 'pending' ? '#ffa500' : (s.is_correct ? '#3dd179' : '#a9b1bb') }}>
                         {s.status === 'pending' ? 'Ожидает проверки' : (s.is_correct ? 'Правильно' : 'Неправильно')}
                       </td>
-                      <td style={{ padding: 8 }}>{formatDate(s.created_at)}</td>
+                      <td style={{ padding: 8 }}>{formatDateTime(s.created_at)}</td>
                     </tr>
                   ))}
                   {cardData.submissions.length === 0 && (

@@ -1,37 +1,32 @@
 @echo off
-echo Starting backend and frontend...
+setlocal enabledelayedexpansion
 
-@REM REM Check for updates from GitHub
-@REM echo Checking for updates from GitHub...
-@REM git fetch origin
+echo Starting Learning Platform in DEV mode...
 
-@REM REM Get current branch name
-@REM for /f %%i in ('git rev-parse --abbrev-ref HEAD') do set branch=%%i
-
-@REM REM Check if there are remote changes
-@REM git status origin/%branch% >nul 2>&1
-@REM if %errorlevel% equ 0 (
-@REM     echo Found updates, pulling latest changes...
-@REM     git pull origin %branch%
-@REM     echo.
-@REM     echo Updates downloaded! Please restart the application.
-@REM     echo.
-@REM )
+REM Ensure backend/.env exists (copy from example if missing).
+if not exist backend\.env (
+    if exist backend\.env.example (
+        echo [dev] backend/.env not found - copying from backend/.env.example
+        copy backend\.env.example backend\.env
+    )
+)
 
 REM Install backend dependencies if needed
-echo Installing backend dependencies...
+echo [dev] Installing backend dependencies...
 uv pip install -r backend/requirements.txt --system
 
 REM Install frontend dependencies if needed
-echo Installing frontend dependencies...
+echo [dev] Installing frontend dependencies...
 cd frontend
 if not exist node_modules call npm install
 cd ..
 
 REM Start backend
-start "Backend" cmd /k "uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000"
+start "Backend" cmd /k "uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000"
 
 REM Start frontend
 start "Frontend" cmd /k "cd frontend && npm run dev"
 
 echo Both services are starting in separate windows.
+echo   Backend:  http://127.0.0.1:8000
+echo   Frontend: http://localhost:5173

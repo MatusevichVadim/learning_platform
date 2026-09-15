@@ -1,0 +1,15 @@
+[Unit]
+Description=Learning Platform Backend (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+User=__APP_USER__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/backend/.env
+ExecStart=/usr/bin/env uvicorn backend.app.main:app --host 127.0.0.1 --port __BACKEND_PORT__
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

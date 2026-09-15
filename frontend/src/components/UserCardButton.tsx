@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getMyCard } from '../api'
 import CardChart from './CardChart'
 import LessonProgress from './LessonProgress'
-import { formatDate } from '../utils/date'
+import { formatDateTime } from '../utils/date'
 
 type CardData = Awaited<ReturnType<typeof getMyCard>>
 
@@ -73,7 +73,7 @@ export default function UserCardButton({ inline = false }: { inline?: boolean })
                   {data?.user.username} · {data?.user.role === 'admin' ? 'Администратор' : 'Пользователь'} ·{' '}
                   <span style={{ color: data?.user.is_active ? '#3dd179' : '#dc3545' }}>{data?.user.is_active ? 'Активен' : 'Заблокирован'}</span>
                 </div>
-                <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>{'Регистрация: '}{data ? formatDate(data.user.created_at) : ''}</div>
+                <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>{'Регистрация: '}{data ? formatDateTime(data.user.created_at) : ''}</div>
               </div>
               <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: '#a9b1bb', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
@@ -147,7 +147,7 @@ export default function UserCardButton({ inline = false }: { inline?: boolean })
                           <td style={{ padding: 8, color: s.status === 'pending' ? '#ffa500' : (s.is_correct ? '#3dd179' : '#a9b1bb') }}>
                             {s.status === 'pending' ? 'Ожидает проверки' : (s.is_correct ? 'Правильно' : 'Неправильно')}
                           </td>
-                          <td style={{ padding: 8 }}>{formatDate(s.created_at)}</td>
+                          <td style={{ padding: 8 }}>{formatDateTime(s.created_at)}</td>
                         </tr>
                       ))}
                       {data.submissions.length === 0 && (
