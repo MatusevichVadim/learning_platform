@@ -133,6 +133,49 @@ def submit_code(task_id: int, payload: SubmitCode, user: User = Depends(get_curr
     if not task or task.kind != "code":
         raise HTTPException(status_code=404, detail="Task not found or not a code task")
 
+    # Handle empty/whitespace-only submissions: mark as incorrect immediately
+    # without sending to admin review, allowing the user to try again.
+    if not payload.code or not payload.code.strip():
+        submission = Submission(
+            user_id=user.id,
+            task_id=task.id,
+            code=payload.code,
+            is_correct=False,
+            result="Пустое решение",
+            status="completed",
+        )
+        db.add(submission)
+        db.flush()
+        recompute_user_rating(db, user.id)
+        return {
+            "id": submission.id,
+            "user_id": submission.user_id,
+            "task_id": submission.task_id,
+            "code": submission.code,
+            "is_correct": submission.is_correct,
+            "result": "Пустое решение",
+            "created_at": submission.created_at,
+            "status": submission.status,
+        }
+
+    # Prevent re-submission while a previous code submission is still pending
+    # administrator review.
+    existing_pending = db.execute(
+        select(Submission)
+        .where(
+            Submission.user_id == user.id,
+            Submission.task_id == task.id,
+            Submission.status == "pending",
+        )
+        .order_by(Submission.created_at.desc())
+    ).scalars().first()
+
+    if existing_pending:
+        raise HTTPException(
+            status_code=400,
+            detail="Your solution is already pending review by an administrator. You cannot submit again until it has been reviewed.",
+        )
+
     # Execute the user's code in the isolated sandbox and grade it server-side.
     # The client cannot influence the outcome (no trusted markers).
     ok, result = run_python_tests(payload.code, task.test_spec or "{}")

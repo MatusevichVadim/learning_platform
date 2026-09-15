@@ -189,8 +189,9 @@ export default function LessonDetail() {
       await submitQuiz(task.id, value)
       setDetailedResults(prev => ({ ...prev, [task.id]: undefined })) // clear previous
     } else {
-      const res = await submitCode(task.id, value)
-      console.log('submitCode response:', res)
+      try {
+        const res = await submitCode(task.id, value)
+        console.log('submitCode response:', res)
 
       if (res && res.result && Array.isArray(res.result.results)) {
         console.log('Detailed results:', res.result.results)
@@ -200,6 +201,11 @@ export default function LessonDetail() {
         }
       } else {
         setDetailedResults(prev => ({ ...prev, [task.id]: undefined }))
+      }
+      } catch (error: any) {
+        const detail = error?.response?.data?.detail || 'Не удалось отправить решение'
+        alert(detail)
+        return
       }
     }
     if (id) {
@@ -418,7 +424,17 @@ export default function LessonDetail() {
           )}
           <div className="row" style={{ marginTop: 8, justifyContent: 'space-between' }}>
             {task.kind === 'code' && (
-              <button className="btn" onClick={() => onSubmit(task)}>{'Отправить'}</button>
+              <button
+                className="btn"
+                onClick={() => onSubmit(task)}
+                disabled={submissionDetails[task.id]?.status === 'pending'}
+                style={{
+                  opacity: submissionDetails[task.id]?.status === 'pending' ? 0.5 : 1,
+                  cursor: submissionDetails[task.id]?.status === 'pending' ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {'Отправить'}
+              </button>
             )}
             {status[task.id] !== undefined && status[task.id] !== null && (
               <span style={{ color: status[task.id] ? '#3dd179' : '#a9b1bb' }}>
