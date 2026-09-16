@@ -22,6 +22,7 @@ class UserCreate(BaseModel):
     password: str
     full_name: Optional[str] = None
     role: str = Field("user", pattern="^(admin|user)$")
+    user_class: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -30,6 +31,7 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     # Manual rating adjustment applied by an administrator (added to the computed rating).
     rating_bonus: Optional[int] = None
+    user_class: Optional[str] = None
 
 
 class UserOut(BaseModel):
@@ -42,6 +44,7 @@ class UserOut(BaseModel):
     # Computed rating from solved tasks + streaks, plus the manual admin bonus.
     rating: int = 0
     rating_bonus: int = 0
+    user_class: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 

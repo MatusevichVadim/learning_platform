@@ -236,6 +236,7 @@ def leaderboard(user: User = Depends(get_current_user), db: Session = Depends(ge
             "full_name": u.full_name or u.username,
             "rating": effective_rating(u),
             "rating_bonus": u.rating_bonus or 0,
+            "user_class": u.user_class,
         }
         for u in users
     ]

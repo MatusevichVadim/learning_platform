@@ -23,6 +23,7 @@ class User(Base):
     # `rating_bonus` is a manual adjustment applied by an administrator.
     rating: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     rating_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    user_class: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Arbitrary class assigned to user
 
     submissions: Mapped[list[Submission]] = relationship("Submission", back_populates="user", cascade="all, delete-orphan")
 

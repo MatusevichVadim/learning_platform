@@ -71,7 +71,7 @@ def list_users(
 
     if search:
         like = f"%{search}%"
-        stmt = stmt.where(or_(User.username.ilike(like), User.full_name.ilike(like)))
+        stmt = stmt.where(or_(User.username.ilike(like), User.full_name.ilike(like), User.user_class.ilike(like)))
 
     sort_columns = {
         "id": User.id,
@@ -81,6 +81,7 @@ def list_users(
         "is_active": User.is_active,
         "created_at": User.created_at,
         "rating": (User.rating + User.rating_bonus),
+        "user_class": User.user_class,
     }
     column = sort_columns.get(sort_by, User.created_at)
     if order == "asc":
@@ -104,6 +105,7 @@ def create_user(payload: UserCreate, current_user: User = Depends(get_current_ad
         hashed_password=hashed_password,
         full_name=payload.full_name,
         role=payload.role,
+        user_class=payload.user_class,
     )
     db.add(user)
     db.flush()
@@ -322,6 +324,7 @@ def get_user_card(
             "created_at": user.created_at,
             "rating": effective_rating(user),
             "rating_bonus": user.rating_bonus or 0,
+            "user_class": user.user_class,
             "rank": user_rank,
         },
         "stats": {
@@ -370,6 +373,8 @@ def update_user(user_id: int, payload: UserUpdate, current_user: User = Depends(
         user.is_active = payload.is_active
     if payload.rating_bonus is not None:
         user.rating_bonus = int(payload.rating_bonus)
+    if payload.user_class is not None:
+        user.user_class = payload.user_class
 
     db.flush()
     return user

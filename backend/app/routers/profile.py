@@ -160,6 +160,7 @@ def get_card(
             "created_at": current_user.created_at,
             "rating": effective_rating(current_user),
             "rating_bonus": current_user.rating_bonus or 0,
+            "user_class": current_user.user_class,
             "rank": user_rank,
         },
         "stats": {

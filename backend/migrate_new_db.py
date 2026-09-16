@@ -212,6 +212,7 @@ def _transfer_users(old_engine, new_engine, old_schema, users_col_names):
                     is_active=data.get("is_active"),
                     created_at=_parse_dt(data.get("created_at")),
                     name=data.get("name"),
+                    user_class=data.get("user_class"),
                 )
                 session.add(user)
                 print(f"  [direct] user {uid} ({user.username})")
