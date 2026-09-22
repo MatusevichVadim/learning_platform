@@ -1,7 +1,0 @@
-backup users ids: 25 .. 184 count 53
-backup users with id<=15: []
-current users ids: [1, 2, 3, 9, 10, 11, 12, 13, 14, 15]
-backup tasks with unknown lesson_id: [] count 0
-backup lessons with unknown language_id: [] count 0
-submission user_ids not in backup users: []
-submission task_ids not in backup tasks: [24, 45, 46, 47, 48, 49, 50, 51, 52, 53]

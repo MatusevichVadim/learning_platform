@@ -1,7 +1,0 @@
-submissions -> users: total distinct users 47 orphan rows: []
-submissions -> tasks: total distinct tasks 129 orphan rows: []
-backup users skipped (dup username): [149, 182]
-submissions referencing skipped users: 37
-  distinct task_ids referenced: [24, 26, 27, 28, 71, 72, 73, 84, 86, 425, 430, 457, 458, 518, 533, 534, 537, 538, 540]
-  all those task_ids will be migrated (present in backup tasks): True
-total backup submissions: 2269
