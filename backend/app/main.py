@@ -7,7 +7,7 @@ import os
 
 from .db import init_db
 from .seed import seed_initial_data
-from .routers import public, admin, auth, profile
+from .routers import public, admin, auth, profile, teacher
 
 
 @asynccontextmanager
@@ -47,6 +47,7 @@ app.include_router(public.router, prefix="/api")
 app.include_router(admin.router, prefix="/api/admin")
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(profile.router, prefix="/api/profile")
+app.include_router(teacher.router, prefix="/api/teacher")
 
 
 @app.get("/")

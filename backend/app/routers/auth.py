@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import create_access_token, verify_password
-from ..config import ACCESS_TOKEN_EXPIRE_MINUTES, SECURE_COOKIES
+from ..config import ACCESS_TOKEN_EXPIRE_MINUTES, SECURE_COOKIES, ADMIN_USERNAME, ADMIN_PASSWORD
 from ..db import get_session
 from ..deps import COOKIE_NAME, get_current_user
 from ..models import User
@@ -25,10 +25,20 @@ def get_db() -> Session:
 def login(payload: UserLogin, response: Response, db: Session = Depends(get_db)):
     stmt = select(User).where(User.username == payload.username)
     user = db.execute(stmt).scalar_one_or_none()
-    if not user or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
+
+    # Admin login is restricted to the credentials defined in .env.
+    # This prevents any other user (even one with role="admin" in the DB)
+    # from logging in as admin unless they know the .env credentials.
+    if user and user.role == "admin":
+        if payload.username != ADMIN_USERNAME or payload.password != ADMIN_PASSWORD:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
+    else:
+        if not user or not verify_password(payload.password, user.hashed_password):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
+
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Учетная запись заблокирована")
+
     token = create_access_token({"sub": str(user.id), "role": user.role})
     response.set_cookie(
         COOKIE_NAME,

@@ -8,12 +8,15 @@ type Language = { id: string; name: string; image_url?: string }
 
 export default function LanguageSelect() {
   const [langs, setLangs] = useState<Language[]>([])
+  const [error, setError] = useState<string>('')
   const [userName, setUserName] = useState<string>(localStorage.getItem('user_name') || '')
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
-    listLanguages().then(setLangs)
+    listLanguages()
+      .then(setLangs)
+      .catch((err: any) => setError(err.response?.data?.detail || 'Ошибка загрузки языков'))
   }, [])
 
   const handleChangeName = () => {
@@ -43,9 +46,16 @@ export default function LanguageSelect() {
             </button>
           </div>
         </div>
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(5, 1fr)', 
+        {error && <div style={{ color: '#dc3545', marginBottom: 16 }}>{error}</div>}
+        {langs.length === 0 && !error && (
+          <div style={{ padding: 32, textAlign: 'center', color: '#a9b1bb', border: '1px dashed #243049', borderRadius: 12 }}>
+            {'Учитель или администратор еще не назначил вам языки программирования.'}
+          </div>
+        )}
+        {langs.length > 0 && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, 1fr)',
           gap: '30px',
           marginBottom: '24px'
         }}>
@@ -115,6 +125,7 @@ export default function LanguageSelect() {
             </div>
           ))}
         </div>
+        )}
       </div>
 
       {showLeaderboard && <LeaderboardModal onClose={() => setShowLeaderboard(false)} />}

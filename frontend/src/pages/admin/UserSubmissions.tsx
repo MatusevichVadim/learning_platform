@@ -8,6 +8,7 @@ import { formatDateTime } from '../../utils/date'
 type Submission = {
   id: number
   user_name: string
+  user_class?: string
   lesson_id: number
   lesson_title: string
   language: string

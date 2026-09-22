@@ -8,6 +8,7 @@ import LessonsTab from './LessonsTab'
 import LanguagesTab from './LanguagesTab'
 import SubmissionsTab from './SubmissionsTab'
 import UsersTab from './UsersTab'
+import TeachersTab from './TeachersTab'
 import LeaderboardModal from '../../components/LeaderboardModal'
 
 export default function AdminDashboard() {
@@ -19,7 +20,7 @@ export default function AdminDashboard() {
   const [creator, setCreator] = useS<{ language: 'python'|'csharp'; lessonId?: number; type?: 'quiz'|'code'; title: string; description: string; options: string[]; correct?: string; tests: string }>({ language: 'python', title: '', description: '', options: ['', '', '', ''], tests: '' })
   const [updateTaskForm, setUpdateTaskForm] = useS({ id: 1, title: '', description: '', kind: 'quiz', test_spec: '' })
   const [view, setView] = useS<'add' | 'update'>('add')
-  const [section, setSection] = useS<'tasks' | 'lessons' | 'languages' | 'users'>('languages')
+  const [section, setSection] = useS<'tasks' | 'lessons' | 'languages' | 'users' | 'teachers'>('languages')
   const [adminTab, setAdminTab] = useS<'tables' | 'manage'>('tables')
   const [showLeaderboard, setShowLeaderboard] = useState(false)
 
@@ -148,6 +149,17 @@ export default function AdminDashboard() {
           >
             Пользователи
           </button>
+          <button
+            className="tab"
+            onClick={() => setSection('teachers')}
+            style={{
+              backgroundColor: section === 'teachers' ? '#3dd179' : '#101a2a',
+              color: section === 'teachers' ? '#092013' : '#e6edf3',
+              fontWeight: section === 'teachers' ? 'bold' : 'normal'
+            }}
+          >
+            Учителя
+          </button>
         </div>
         {section === 'languages' && (
           <LanguagesTab />
@@ -190,6 +202,9 @@ export default function AdminDashboard() {
         )}
         {section === 'users' && (
           <UsersTab />
+        )}
+        {section === 'teachers' && (
+          <TeachersTab />
         )}
         </div>
       )}

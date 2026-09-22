@@ -1,0 +1,22 @@
+usernames backup: ['Volodya', 'admin', 'test', 'Антон_2', 'Аня', 'Аня_2', 'БарановскийЖ', 'БобекМ', 'БожкоД', 'Вадим_8', 'ВадимМ', 'ДмитрукТ', 'ДонченкоА', 'ЖебрунН', 'ЗуевА', 'ИВАН', 'КарпечинаВ', 'Катя', 'Катя_2', 'Катя_3', 'КиричукМ', 'КопацкевичА', 'КорженевичА', 'КорунецК', 'КравцовВ', 'КреминскийЕ', 'КреминскийЗ', 'КрячковА', 'КузавкаЕ', 'КушнерукА', 'ЛаптановичТ', 'ЛяшукМ', 'МариничН', 'НасеняМ', 'Никита_2', 'ОнищукА', 'ПушилоЕ', 'Рома', 'СкакунВ', 'СмальА', 'СобольИ', 'ТроцюкТ', 'ХаритонюкР', 'ЦворИ', 'ШведА', 'ЯцкевичЯ', 'анна', 'артем', 'артем_2', 'даник', 'даник_2', 'даник_3', 'рома_2']
+usernames current: ['1', 'admin', 'language_test_student_f99c536ded', 'language_test_teacher_f99c536ded', 'new_student', 'test', 'test_student1', 'test_student2', 'test_student3', 'test_teacher']
+usernames overlap: ['admin', 'test']
+roles backup: ['admin', 'user']
+roles current: ['admin', 'teacher', 'user']
+user_class current: ['1', '10A', '11B', '219 st 1', 'LANG_f99c536ded', 'None']
+current users:
+   (1, 'admin', '$2b$12$RlMnJDcYxi/4t4qVuTJa2epNEIbZ3hO6RN9.n/5JYSmXoBB3nQMx2', 'Administrator', 'admin', 1, '2026-09-15 19:15:17.916657', None, 0, 0, None)
+   (2, 'test', '$2b$12$uxaupm39Q39dtoRS4z0C8edUqfVfZeDtoTbYs0lI.IdoK6B0IQ8uK', 'test', 'user', 1, '2026-09-16 11:33:52.378862', None, 1, 0, '219 st 1')
+   (3, '1', '$2b$12$jHf7zQlaJic.h5EGxvnc1OiIaBHpLKm5uSV40ezudc6IMO80XbUAa', '1', 'teacher', 1, '2026-09-16 11:34:24.983897', None, 0, 0, '1')
+   (9, 'language_test_student_f99c536ded', '$2b$12$6USS3HGjryq2pnYA3f3y9OmnlFHn9pCH0XB96YMz95VkeN6ArDf2q', 'language_test_student_f99c536ded', 'user', 1, '2026-09-16 21:30:06.221491', None, 0, 0, 'LANG_f99c536ded')
+   (10, 'language_test_teacher_f99c536ded', '$2b$12$k7DtasR4RuIgbgIcnsCsSumi9E1P8jH53UXE8UaN9m1OMqsQp558G', 'language_test_teacher_f99c536ded', 'teacher', 1, '2026-09-16 21:30:06.428923', None, 0, 0, None)
+   (11, 'test_teacher', '$2b$12$h4dW3i9ZI4goEUyPRLr9B.IWz8e0fMbuzLRnN2qIA0J4s2JFvuwpq', 'Test Teacher', 'teacher', 1, '2026-09-16 21:54:57.705382', None, 0, 0, '10A')
+   (12, 'test_student1', '$2b$12$StK4K3MI63krnd2hJnS2reuW2yDqdlmT1YAk.1trZU/edlt8k9rVm', 'Updated Student One', 'user', 1, '2026-09-16 21:54:57.915828', None, 0, 0, '10A')
+   (13, 'test_student2', '$2b$12$bqE7IwwXX4DL/CXB0VYzHuMNNJY3V5PledqEJkRixzowA3VHTCUbi', 'Student Two', 'user', 1, '2026-09-16 21:54:58.121204', None, 0, 0, '10A')
+   (14, 'test_student3', '$2b$12$5ywqBiawaloAymWX1nj6xelJsXxGfn/2uSdaVuSjMlYgoMaoClZTO', 'Student Three', 'user', 1, '2026-09-16 21:54:58.327373', None, 0, 0, '11B')
+   (15, 'new_student', '$2b$12$it1xiiKMIoIbeCFNgoKjk.6XM0aX.JAl.mufiZgD0RzHZ6eC279hC', 'New Student', 'user', 1, '2026-09-16 21:54:58.778147', None, 0, 0, '10A')
+foreign keys current:
+  submissions: (0, 0, 'tasks', 'task_id', 'id', 'NO ACTION', 'CASCADE', 'NONE')
+  submissions: (1, 0, 'users', 'user_id', 'id', 'NO ACTION', 'CASCADE', 'NONE')
+  tasks: (0, 0, 'lessons', 'lesson_id', 'id', 'NO ACTION', 'CASCADE', 'NONE')
+  lessons: (0, 0, 'languages', 'language_id', 'id', 'NO ACTION', 'CASCADE', 'NONE')

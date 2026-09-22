@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { listTasks, submitQuiz, submitCode, lessonStatus, getTaskSubmission, getLesson } from '../api'
 
@@ -15,6 +15,7 @@ type SubmissionDetails = {
   id: number
   is_correct: boolean
   result: string
+  code: string | null
   status: string
   created_at: string
 }
@@ -25,7 +26,6 @@ export default function LessonDetail() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [status, setStatus] = useState<Record<number, boolean | null>>({})
-  const [activeIdx, setActiveIdx] = useState(0)
   const [shuffledOpts, setShuffledOpts] = useState<Record<number, string[]>>({})
   const [quizAttempts, setQuizAttempts] = useState<Record<number, number>>({})
 
@@ -37,6 +37,62 @@ export default function LessonDetail() {
 
   // State to track if we have pending submissions that need polling
   const [hasPendingSubmissions, setHasPendingSubmissions] = useState(false)
+
+  // Current user id (used to namespace localStorage keys so quiz attempts
+  // don't leak between different users on the same computer)
+  const currentUserId = (() => {
+    try {
+      const raw = localStorage.getItem('user')
+      if (!raw) return 'guest'
+      const parsed = JSON.parse(raw)
+      return parsed?.id != null ? String(parsed.id) : 'guest'
+    } catch {
+      return 'guest'
+    }
+  })()
+
+  function quizAttemptKey(taskId: number) {
+    return `quiz_attempts_${currentUserId}_${lessonId}_${taskId}`
+  }
+
+  // Persist the active task index across reloads (per user + lesson).
+  // Restore happens in the effect below (after lessonId is resolved) so that
+  // the localStorage key is stable even if lessonId is undefined on first render.
+  const [activeIdx, setActiveIdx] = useState(0)
+  const lastLessonIdRef = useRef<string | undefined>(undefined)
+
+  function setActiveTaskIndex(idx: number) {
+    setActiveIdx(idx)
+    if (lessonId) {
+      try {
+        localStorage.setItem(`active_task_${currentUserId}_${lessonId}`, String(idx))
+      } catch (e) {
+        // ignore storage errors
+      }
+    }
+  }
+
+  // Restore the saved task index for the current lesson (and reset it when
+  // switching to a different lesson). This runs after lessonId is resolved,
+  // so the localStorage key is always correct.
+  useEffect(() => {
+    if (!lessonId) return
+    if (lastLessonIdRef.current === lessonId) return
+    lastLessonIdRef.current = lessonId
+    try {
+      const stored = localStorage.getItem(`active_task_${currentUserId}_${lessonId}`)
+      if (stored !== null) {
+        const parsed = Number(stored)
+        if (!Number.isNaN(parsed) && parsed >= 0) {
+          setActiveIdx(parsed)
+          return
+        }
+      }
+    } catch (e) {
+      // ignore storage errors
+    }
+    setActiveIdx(0)
+  }, [lessonId, currentUserId])
 
   // State for additional information modal
   const [showInfoModal, setShowInfoModal] = useState(false)
@@ -83,6 +139,27 @@ export default function LessonDetail() {
     }
   }
 
+  // Determine whether the code editor should be read-only.
+  // It becomes read-only only once a solution has been reviewed as correct.
+  // The submitted code stays visible in the editor (even after reload) but
+  // cannot be edited anymore. Incorrect or pending solutions remain editable.
+  function isCodeReadOnly(task: Task): boolean {
+    const detail = submissionDetails[task.id]
+    if (!detail) return false
+    return detail.status === 'completed' && detail.is_correct === true
+  }
+
+  // Determine whether the "Submit" button should be disabled.
+  // Re-submission is blocked while a solution is pending admin review,
+  // and once a solution has already been accepted as correct.
+  function isCodeSubmitDisabled(task: Task): boolean {
+    const detail = submissionDetails[task.id]
+    if (!detail) return false
+    if (detail.status === 'pending') return true
+    if (detail.status === 'completed' && detail.is_correct === true) return true
+    return false
+  }
+
 
   useEffect(() => {
     const id = Number(lessonId)
@@ -94,10 +171,11 @@ export default function LessonDetail() {
         setTasks(taskList)
         await fetchSubmissionDetails(taskList)
 
-        // Load quiz attempts from localStorage
+        // Load quiz attempts from localStorage (keyed per-user so attempts on one
+        // computer don't leak between different logged-in users)
         const attempts: Record<number, number> = {}
         taskList.forEach(task => {
-          const stored = localStorage.getItem(`quiz_attempts_${id}_${task.id}`)
+          const stored = localStorage.getItem(quizAttemptKey(task.id))
           attempts[task.id] = stored ? Number(stored) : 0
         })
         setQuizAttempts(attempts)
@@ -116,6 +194,56 @@ export default function LessonDetail() {
         .catch(error => console.error('Failed to fetch additional info:', error))
     }
   }, [lessonId])
+
+  // Restore submitted code into the editor so it persists across reloads.
+  // Only restore once per task (when a submission exists and the editor is empty).
+  useEffect(() => {
+    setAnswers(prev => {
+      let changed = false
+      const next = { ...prev }
+      for (const task of tasks) {
+        const submittedCode = submissionDetails[task.id]?.code
+        if (task.kind === 'code' && submittedCode && !prev[task.id]) {
+          next[task.id] = submittedCode
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [tasks, submissionDetails])
+
+  // Clamp the saved active task index to the current number of tasks so that
+  // after a reload (or when the task list changes) we stay on the same task
+  // instead of being reset to the first one.
+  useEffect(() => {
+    if (tasks.length === 0) return
+    if (activeIdx < 0 || activeIdx >= tasks.length) {
+      setActiveTaskIndex(Math.max(0, Math.min(activeIdx, tasks.length - 1)))
+    }
+  }, [tasks.length])
+
+  // Reset the saved task index only when the user actually switches to a
+  // different lesson (not on initial mount / reload of the same lesson).
+  useEffect(() => {
+    if (lastLessonIdRef.current === undefined) {
+      lastLessonIdRef.current = lessonId
+      return
+    }
+    if (lastLessonIdRef.current !== lessonId) {
+      lastLessonIdRef.current = lessonId
+      setActiveTaskIndex(0)
+    }
+  }, [lessonId])
+
+  // Clamp the saved active task index to the current number of tasks so that
+  // after a reload (or when the task list changes) we stay on the same task
+  // instead of being reset to the first one.
+  useEffect(() => {
+    if (tasks.length === 0) return
+    if (activeIdx < 0 || activeIdx >= tasks.length) {
+      setActiveTaskIndex(Math.max(0, Math.min(activeIdx, tasks.length - 1)))
+    }
+  }, [tasks.length])
 
   // Polling effect for pending submissions
   useEffect(() => {
@@ -151,7 +279,7 @@ export default function LessonDetail() {
               if (s[task.id] === true) {
                 const currentTaskIndex = tasks.findIndex(t => t.id === task.id)
                 if (currentTaskIndex !== -1 && currentTaskIndex < tasks.length - 1) {
-                  setActiveIdx(currentTaskIndex + 1)
+                  setActiveTaskIndex(currentTaskIndex + 1)
                   break
                 }
               }
@@ -219,7 +347,7 @@ export default function LessonDetail() {
         const currentTaskIndex = tasks.findIndex(t => t.id === task.id)
         if (currentTaskIndex !== -1 && currentTaskIndex < tasks.length - 1) {
           // Move to next task immediately
-          setActiveIdx(currentTaskIndex + 1)
+          setActiveTaskIndex(currentTaskIndex + 1)
         }
       }
       
@@ -229,13 +357,13 @@ export default function LessonDetail() {
         if (task.kind === 'quiz') {
           setQuizAttempts(prev => {
             const newAttempts = { ...prev, [task.id]: (prev[task.id] || 0) + 1 }
-            localStorage.setItem(`quiz_attempts_${lessonId}_${task.id}`, String(newAttempts[task.id]))
+            localStorage.setItem(quizAttemptKey(task.id), String(newAttempts[task.id]))
             
             // If 3 failed attempts, move to next task (if not the last one)
             if (newAttempts[task.id] >= 3) {
               const currentTaskIndex = tasks.findIndex(t => t.id === task.id)
               if (currentTaskIndex !== -1 && currentTaskIndex < tasks.length - 1) {
-                setActiveIdx(currentTaskIndex + 1)
+                setActiveTaskIndex(currentTaskIndex + 1)
               }
             }
             
@@ -254,12 +382,17 @@ export default function LessonDetail() {
     }
   }
 
+  // Check if user is a teacher to navigate back to teacher dashboard
+  const user = localStorage.getItem('user')
+  const userRole = user ? JSON.parse(user).role : null
+  const isTeacher = userRole === 'teacher'
+
   return (
     <div className="container">
       <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button
           className="btn"
-          onClick={() => navigate(`/lessons/${language}`)}
+          onClick={() => isTeacher ? navigate('/teacher') : navigate(`/lessons/${language}`)}
           style={{ backgroundColor: '#6c757d' }}
         >
           ← Назад к урокам
@@ -286,7 +419,7 @@ export default function LessonDetail() {
             return (
               <button
                 key={task.id}
-                onClick={() => !isDisabled && setActiveIdx(idx)}
+                onClick={() => !isDisabled && setActiveTaskIndex(idx)}
                 className={cls}
                 disabled={isDisabled}
                 style={{
@@ -420,6 +553,7 @@ export default function LessonDetail() {
               value={answers[task.id] || ''}
               onChange={value => setAnswers(a => ({ ...a, [task.id]: value }))}
               language={language || 'python'}
+              readOnly={isCodeReadOnly(task)}
             />
           )}
           <div className="row" style={{ marginTop: 8, justifyContent: 'space-between' }}>
@@ -427,10 +561,10 @@ export default function LessonDetail() {
               <button
                 className="btn"
                 onClick={() => onSubmit(task)}
-                disabled={submissionDetails[task.id]?.status === 'pending'}
+                disabled={isCodeSubmitDisabled(task)}
                 style={{
-                  opacity: submissionDetails[task.id]?.status === 'pending' ? 0.5 : 1,
-                  cursor: submissionDetails[task.id]?.status === 'pending' ? 'not-allowed' : 'pointer',
+                  opacity: isCodeSubmitDisabled(task) ? 0.5 : 1,
+                  cursor: isCodeSubmitDisabled(task) ? 'not-allowed' : 'pointer',
                 }}
               >
                 {'Отправить'}
@@ -443,7 +577,7 @@ export default function LessonDetail() {
             )}
             {submissionDetails[task.id]?.status === 'pending' && (
               <span style={{ color: 'orange' }}>
-                Ожидает проверки администратором
+                Ожидает проверки
               </span>
             )}
             {detailedResults[task.id] && detailedResults[task.id]!.length > 0 && (

@@ -9,8 +9,10 @@ import Login from './pages/Login'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import UserSubmissions from './pages/admin/UserSubmissions'
 import Profile from './pages/Profile'
+import TeacherDashboard from './pages/TeacherDashboard'
 import ProtectedRoute from './components/ProtectedRoute'
 import UserProtectedRoute from './components/UserProtectedRoute'
+import TeacherProtectedRoute from './components/TeacherProtectedRoute'
 
 const router = createBrowserRouter([
   { path: '/', element: <Home /> },
@@ -61,6 +63,14 @@ const router = createBrowserRouter([
       <UserProtectedRoute>
         <UserSubmissions />
       </UserProtectedRoute>
+    )
+  },
+  {
+    path: '/teacher',
+    element: (
+      <TeacherProtectedRoute>
+        <TeacherDashboard />
+      </TeacherProtectedRoute>
     )
   },
 ])

@@ -20,6 +20,8 @@ export default function Home() {
       // Redirect based on role
       if (user.role === 'admin') {
         navigate('/admin')
+      } else if (user.role === 'teacher') {
+        navigate('/teacher')
       } else {
         navigate('/languages')
       }

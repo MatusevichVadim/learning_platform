@@ -1,10 +1,29 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Table
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from .db import Base
+
+
+# Association table for teacher-class assignments
+teacher_classes = Table(
+    "teacher_classes",
+    Base.metadata,
+    Column("teacher_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_class", String(50), primary_key=True),
+)
+
+
+# Languages explicitly assigned to a student. Admins and teachers can manage
+# these assignments; students can only access lessons in their assigned languages.
+user_languages = Table(
+    "user_languages",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("language_id", String(50), ForeignKey("languages.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class User(Base):
@@ -14,7 +33,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    role: Mapped[str] = mapped_column(String(20), default="user", nullable=False)  # "admin" | "user"
+    role: Mapped[str] = mapped_column(String(20), default="user", nullable=False)  # "admin" | "teacher" | "user"
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     # Legacy column kept for backward compatibility with existing DB
@@ -26,6 +45,19 @@ class User(Base):
     user_class: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Arbitrary class assigned to user
 
     submissions: Mapped[list[Submission]] = relationship("Submission", back_populates="user", cascade="all, delete-orphan")
+    assigned_languages: Mapped[list[Language]] = relationship(
+        "Language",
+        secondary=user_languages,
+        back_populates="assigned_users",
+    )
+    # Teacher's assigned classes (many-to-many)
+    assigned_classes: Mapped[list[str]] = relationship(
+        "User",
+        secondary=teacher_classes,
+        primaryjoin=id == teacher_classes.c.teacher_id,
+        secondaryjoin=user_class == teacher_classes.c.user_class,
+        viewonly=True,
+    )
 
 
 class Language(Base):
@@ -38,6 +70,11 @@ class Language(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     lessons: Mapped[list[Lesson]] = relationship("Lesson", back_populates="language_obj", cascade="all, delete-orphan")
+    assigned_users: Mapped[list[User]] = relationship(
+        "User",
+        secondary=user_languages,
+        back_populates="assigned_languages",
+    )
 
 
 class Lesson(Base):

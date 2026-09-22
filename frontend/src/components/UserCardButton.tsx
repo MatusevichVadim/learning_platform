@@ -70,7 +70,8 @@ export default function UserCardButton({ inline = false }: { inline?: boolean })
                   <span style={{ fontSize: 14, fontWeight: 600, color: '#17a2b8' }}>{'Место: '}{data?.user.rank ?? '-'}</span>
                 </h3>
                 <div style={{ color: '#a9b1bb', fontSize: 13, marginTop: 4 }}>
-                  {data?.user.username} · {data?.user.role === 'admin' ? 'Администратор' : 'Пользователь'} ·{' '}
+                  {data?.user.username} ·                {data?.user.role === 'admin' ? 'Администратор' : data?.user.role === 'teacher' ? 'Учитель' : 'Пользователь'} ·{' '}
+                  {data?.user.user_class && <span style={{ color: '#f39c12' }}>Класс: {data?.user.user_class} · </span>}
                   <span style={{ color: data?.user.is_active ? '#3dd179' : '#dc3545' }}>{data?.user.is_active ? 'Активен' : 'Заблокирован'}</span>
                 </div>
                 <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>{'Регистрация: '}{data ? formatDateTime(data.user.created_at) : ''}</div>

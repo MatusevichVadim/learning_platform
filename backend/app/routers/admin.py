@@ -6,17 +6,18 @@ import shutil
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, delete, or_, asc, desc
+from sqlalchemy import select, func, delete, or_, asc, desc, insert
 from sqlalchemy.orm import Session
 
 from pydantic import BaseModel, Field
 
 from ..auth import get_password_hash
+from ..access import get_user_language_ids, visible_lessons_condition
 from ..db import get_session
 from ..deps import get_current_admin, get_current_user
-from ..models import Language, Lesson, Task, Submission, User
+from ..models import Language, Lesson, Task, Submission, User, teacher_classes, user_languages
 from ..rating import recompute_user_rating, recompute_all_ratings, effective_rating
-from ..schemas import LessonOut, TaskOut, UserOut, UserCreate, UserUpdate
+from ..schemas import LessonOut, TaskOut, UserOut, UserCreate, UserUpdate, UserLanguageAssign, UserLanguageOut
 
 # Upload directory for language images - save to backend/uploads
 CURRENT_FILE = os.path.abspath(__file__)
@@ -355,6 +356,11 @@ def update_user(user_id: int, payload: UserUpdate, current_user: User = Depends(
         if payload.is_active is False:
             raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
 
+    if payload.username is not None:
+        existing = db.execute(select(User).where(User.username == payload.username, User.id != user_id)).scalar_one_or_none()
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already exists")
+
     # Guard against removing the last active admin.
     if (payload.role == "user" or payload.is_active is False) and user.role == "admin" and user.is_active:
         other_active_admins = db.execute(
@@ -367,6 +373,8 @@ def update_user(user_id: int, payload: UserUpdate, current_user: User = Depends(
 
     if payload.full_name is not None:
         user.full_name = payload.full_name
+    if payload.username is not None:
+        user.username = payload.username
     if payload.role is not None:
         user.role = payload.role
     if payload.is_active is not None:
@@ -378,6 +386,134 @@ def update_user(user_id: int, payload: UserUpdate, current_user: User = Depends(
 
     db.flush()
     return user
+
+
+# --- Student language access ---
+
+@router.get("/users/{user_id}/languages", response_model=UserLanguageOut)
+def get_user_languages(
+    user_id: int,
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    language_ids = list(
+        db.execute(
+            select(user_languages.c.language_id)
+            .where(user_languages.c.user_id == user_id)
+            .order_by(user_languages.c.language_id)
+        )
+        .scalars()
+        .all()
+    )
+    return UserLanguageOut(user_id=user_id, language_ids=language_ids)
+
+
+@router.put("/users/{user_id}/languages", response_model=UserLanguageOut)
+def set_user_languages(
+    user_id: int,
+    payload: UserLanguageAssign,
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.role != "user":
+        raise HTTPException(status_code=400, detail="Languages can only be assigned to students")
+
+    language_ids = list(dict.fromkeys(payload.language_ids))
+    if language_ids:
+        existing = db.execute(select(Language.id).where(Language.id.in_(language_ids))).scalars().all()
+        missing = set(language_ids) - set(existing)
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown language ids: {', '.join(sorted(missing))}",
+            )
+
+    db.execute(delete(user_languages).where(user_languages.c.user_id == user_id))
+    for language_id in language_ids:
+        db.execute(insert(user_languages).values(user_id=user_id, language_id=language_id))
+    db.flush()
+    return UserLanguageOut(user_id=user_id, language_ids=language_ids)
+
+
+# --- Teacher Management ---
+
+@router.get("/teachers", response_model=list[UserOut])
+def list_teachers(current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """List all users with the 'teacher' role."""
+    return db.execute(select(User).where(User.role == "teacher").order_by(User.created_at.desc())).scalars().all()
+
+
+@router.get("/classes")
+def list_all_classes(current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """List all distinct user_class values that exist in the system."""
+    classes = db.execute(
+        select(func.distinct(User.user_class)).where(User.user_class.isnot(None))
+    ).scalars().all()
+    return [{"user_class": c} for c in classes]
+
+
+@router.get("/teachers/{teacher_id}/classes")
+def get_teacher_classes(teacher_id: int, current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Get the list of classes assigned to a teacher."""
+    teacher = db.get(User, teacher_id)
+    if not teacher or teacher.role != "teacher":
+        raise HTTPException(status_code=404, detail="Teacher not found")
+    rows = db.execute(
+        select(teacher_classes.c.user_class).where(teacher_classes.c.teacher_id == teacher_id)
+    ).scalars().all()
+    return {"classes": list(rows)}
+
+
+@router.post("/teachers/{teacher_id}/classes")
+def assign_class_to_teacher(teacher_id: int, payload: dict, current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Assign a class to a teacher."""
+    teacher = db.get(User, teacher_id)
+    if not teacher or teacher.role != "teacher":
+        raise HTTPException(status_code=404, detail="Teacher not found")
+
+    user_class = payload.get("user_class", "")
+    if not user_class:
+        raise HTTPException(status_code=400, detail="user_class is required")
+
+    existing = db.execute(
+        select(teacher_classes).where(
+            teacher_classes.c.teacher_id == teacher_id,
+            teacher_classes.c.user_class == user_class,
+        )
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Class already assigned to this teacher")
+
+    db.execute(
+        insert(teacher_classes).values(teacher_id=teacher_id, user_class=user_class)
+    )
+    db.flush()
+    return {"status": "assigned", "teacher_id": teacher_id, "user_class": user_class}
+
+
+@router.delete("/teachers/{teacher_id}/classes/{user_class}")
+def unassign_class_from_teacher(teacher_id: int, user_class: str, current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Remove a class assignment from a teacher."""
+    teacher = db.get(User, teacher_id)
+    if not teacher or teacher.role != "teacher":
+        raise HTTPException(status_code=404, detail="Teacher not found")
+
+    result = db.execute(
+        delete(teacher_classes).where(
+            teacher_classes.c.teacher_id == teacher_id,
+            teacher_classes.c.user_class == user_class,
+        )
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Class not assigned to this teacher")
+    db.flush()
+    return {"status": "unassigned", "teacher_id": teacher_id, "user_class": user_class}
 
 
 @router.post("/recompute-ratings")
@@ -409,14 +545,18 @@ def list_submissions(user_name: str = "", page: int = 1, page_size: int = 50, cu
     # Non-admin users may only view their own submissions.
     if current_user.role != "admin":
         user_name = current_user.username
+    visible_lesson = visible_lessons_condition(current_user, get_user_language_ids(db, current_user))
     base_stmt = (
-        select(Submission, User.username, Task.lesson_id, Task.title.label('task_title'), Lesson.title.label('lesson_title'), Language.name.label('language'))
+        select(Submission, User.username, User.user_class, Task.lesson_id, Task.title.label('task_title'), Lesson.title.label('lesson_title'), Language.name.label('language'))
         .join(User, User.id == Submission.user_id)
         .join(Task, Task.id == Submission.task_id)
         .join(Lesson, Lesson.id == Task.lesson_id)
         .join(Language, Language.id == Lesson.language_id)
+        .where(visible_lesson)
         .order_by(Submission.created_at.desc())
     )
+    if current_user.role != "admin":
+        base_stmt = base_stmt.where(Submission.user_id == current_user.id)
     if user_name:
         base_stmt = base_stmt.where(User.username == user_name)
     count_stmt = select(func.count()).select_from(base_stmt.subquery())
@@ -424,11 +564,12 @@ def list_submissions(user_name: str = "", page: int = 1, page_size: int = 50, cu
     stmt = base_stmt.offset((page - 1) * page_size).limit(page_size)
     rows = db.execute(stmt).all()
     out = []
-    for s, user_name_val, lesson_id, task_title, lesson_title, language in rows:
+    for s, user_name_val, user_class_val, lesson_id, task_title, lesson_title, language in rows:
         status = getattr(s, 'status', 'completed')
         out.append({
             "id": s.id,
             "user_name": user_name_val,
+            "user_class": user_class_val,
             "lesson_id": int(lesson_id),
             "lesson_title": lesson_title,
             "language": language,

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..access import ensure_language_access, ensure_lesson_access, get_user_language_ids, visible_lessons_condition
 from ..models import Language, Lesson, Task, Submission, User
 from ..checker import run_python_tests
 from ..rating import recompute_user_rating, effective_rating
@@ -28,35 +29,66 @@ def deprecated_legacy_endpoints():
 
 
 @router.get("/languages")
-def list_languages(db: Session = Depends(get_db)):
-    languages = db.execute(select(Language).order_by(Language.created_at)).scalars().all()
+def list_languages(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    language_ids = get_user_language_ids(db, current_user)
+    languages = db.execute(
+        select(Language)
+        .where(Language.id.in_(language_ids))
+        .order_by(Language.created_at)
+    ).scalars().all()
     return [{"id": lang.id, "name": lang.name, "image_url": lang.image_url} for lang in languages]
 
 
 @router.get("/lessons", response_model=list[LessonOut])
-def list_lessons(language: str, page: int = 1, page_size: int = 50, db: Session = Depends(get_db)):
+def list_lessons(
+    language: str,
+    page: int = 1,
+    page_size: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ensure_language_access(db, current_user, language)
     offset = (page - 1) * page_size
-    stmt = select(Lesson).where(Lesson.language == language).order_by(Lesson.order_index).offset(offset).limit(page_size)
+    stmt = select(Lesson).where(Lesson.language_id == language).order_by(Lesson.order_index).offset(offset).limit(page_size)
     return db.execute(stmt).scalars().all()
 
 
 @router.get("/lessons/{lesson_id}/tasks", response_model=list[TaskOut])
-def list_tasks(lesson_id: int, page: int = 1, page_size: int = 50, db: Session = Depends(get_db)):
+def list_tasks(
+    lesson_id: int,
+    page: int = 1,
+    page_size: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    lesson = db.get(Lesson, lesson_id)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    ensure_lesson_access(db, current_user, lesson)
     offset = (page - 1) * page_size
     stmt = select(Task).where(Task.lesson_id == lesson_id).order_by(Task.order_index).offset(offset).limit(page_size)
     return db.execute(stmt).scalars().all()
 
 
 @router.get("/lessons/{lesson_id}", response_model=LessonOut)
-def get_lesson(lesson_id: int, db: Session = Depends(get_db)):
+def get_lesson(
+    lesson_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     lesson = db.get(Lesson, lesson_id)
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
+    ensure_lesson_access(db, current_user, lesson)
     return lesson
 
 
 @router.get("/lessons/{lesson_id}/status")
 def lesson_status(lesson_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    lesson = db.get(Lesson, lesson_id)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    ensure_lesson_access(db, user, lesson)
     tasks = db.execute(select(Task).where(Task.lesson_id == lesson_id).order_by(Task.order_index)).scalars().all()
     task_ids = [t.id for t in tasks]
     if not task_ids:
@@ -73,15 +105,24 @@ def lesson_status(lesson_id: int, user: User = Depends(get_current_user), db: Se
 
 
 @router.get("/lessons/{lesson_id}/additional-info")
-def get_lesson_additional_info_public(lesson_id: int, db: Session = Depends(get_db)):
+def get_lesson_additional_info_public(
+    lesson_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     lesson = db.get(Lesson, lesson_id)
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
+    ensure_lesson_access(db, current_user, lesson)
     return {"additional_info": lesson.additional_info or ""}
 
 
 @router.get("/tasks/{task_id}/submission")
 def get_task_submission(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    task = db.get(Task, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    ensure_lesson_access(db, user, task.lesson)
     submission = db.execute(
         select(Submission)
         .where(Submission.user_id == user.id, Submission.task_id == task_id)
@@ -95,6 +136,7 @@ def get_task_submission(task_id: int, user: User = Depends(get_current_user), db
         "id": submission.id,
         "is_correct": submission.is_correct,
         "result": submission.result,
+        "code": submission.code,
         "status": getattr(submission, 'status', 'completed'),
         "created_at": submission.created_at,
     }
@@ -102,8 +144,18 @@ def get_task_submission(task_id: int, user: User = Depends(get_current_user), db
 
 @router.get("/progress")
 def get_my_progress(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    total_tasks = db.execute(select(Task)).scalars().all()
-    user_subs = db.execute(select(Submission).where(Submission.user_id == user.id)).scalars().all()
+    language_ids = get_user_language_ids(db, user)
+    total_tasks = db.execute(
+        select(Task)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Lesson.language_id.in_(language_ids))
+    ).scalars().all()
+    user_subs = db.execute(
+        select(Submission)
+        .join(Task, Task.id == Submission.task_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Submission.user_id == user.id, Lesson.language_id.in_(language_ids))
+    ).scalars().all()
     solved = sum(1 for s in user_subs if s.is_correct)
     return {"user_id": user.id, "solved": solved, "total": len(total_tasks)}
 
@@ -113,6 +165,7 @@ def submit_quiz(task_id: int, payload: SubmitQuiz, user: User = Depends(get_curr
     task = db.get(Task, task_id)
     if not task or task.kind != "quiz":
         raise HTTPException(status_code=404, detail="Task not found or not a quiz")
+    ensure_lesson_access(db, user, task.lesson)
     spec = json.loads(task.test_spec or "{}")
     correct_letters = spec.get("correct", [])
     if isinstance(correct_letters, str):
@@ -132,6 +185,7 @@ def submit_code(task_id: int, payload: SubmitCode, user: User = Depends(get_curr
     task = db.get(Task, task_id)
     if not task or task.kind != "code":
         raise HTTPException(status_code=404, detail="Task not found or not a code task")
+    ensure_lesson_access(db, user, task.lesson)
 
     # Handle empty/whitespace-only submissions: mark as incorrect immediately
     # without sending to admin review, allowing the user to try again.
@@ -226,7 +280,7 @@ def leaderboard(user: User = Depends(get_current_user), db: Session = Depends(ge
     # Only active (non-blocked) non-admin users appear in the leaderboard.
     users = db.execute(
         select(User)
-        .where(User.is_active.is_(True), User.role != "admin")
+        .where(User.is_active.is_(True), User.role.notin_(["admin", "teacher"]))
         .order_by(_desc(User.rating + User.rating_bonus))
     ).scalars().all()
     return [

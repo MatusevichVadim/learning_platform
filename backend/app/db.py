@@ -44,7 +44,12 @@ Base = declarative_base()
 
 def init_db() -> None:
     from . import models  # noqa: F401 - ensure models are imported for metadata
+    from .models import user_languages
+
     Base.metadata.create_all(bind=engine)
+    # create_all only creates tables that are absent from the metadata as a
+    # whole; explicitly ensure this association table exists for upgraded DBs.
+    user_languages.create(bind=engine, checkfirst=True)
 
 
 @contextmanager

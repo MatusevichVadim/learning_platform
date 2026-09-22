@@ -48,3 +48,15 @@ def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not admin")
     return current_user
+
+
+def get_current_teacher(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not teacher")
+    return current_user
+
+
+def get_current_admin_or_teacher(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role not in ("admin", "teacher"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not admin or teacher")
+    return current_user

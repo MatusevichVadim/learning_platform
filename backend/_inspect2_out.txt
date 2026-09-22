@@ -1,0 +1,14 @@
+============================================================
+DB: backup.sqlite3
+  err languages no such column: title
+  err lessons no such column: name
+  err tasks no such column: name
+  err users no such column: title
+  err submissions no such column: name
+============================================================
+DB: backend/backend_data.sqlite3
+  err languages no such column: title
+  err lessons no such column: name
+  err tasks no such column: name
+  err users no such column: title
+  err submissions no such column: name

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, Union
+from typing import Optional, Union, List
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,13 +21,14 @@ class UserCreate(BaseModel):
     username: str
     password: str
     full_name: Optional[str] = None
-    role: str = Field("user", pattern="^(admin|user)$")
+    role: str = Field("user", pattern="^(admin|teacher|user)$")
     user_class: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
+    username: Optional[str] = Field(None, min_length=1)
     full_name: Optional[str] = None
-    role: Optional[str] = Field(None, pattern="^(admin|user)$")
+    role: Optional[str] = Field(None, pattern="^(admin|teacher|user)$")
     is_active: Optional[bool] = None
     # Manual rating adjustment applied by an administrator (added to the computed rating).
     rating_bonus: Optional[int] = None
@@ -46,6 +47,34 @@ class UserOut(BaseModel):
     rating_bonus: int = 0
     user_class: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+
+class TeacherClassAssign(BaseModel):
+    user_class: str
+
+
+class TeacherClassesOut(BaseModel):
+    classes: List[str]
+
+
+class TeacherStudentOut(BaseModel):
+    id: int
+    username: str
+    full_name: Optional[str] = None
+    user_class: Optional[str] = None
+    is_active: bool
+    rating: int = 0
+    rating_bonus: int = 0
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserLanguageAssign(BaseModel):
+    language_ids: List[str]
+
+
+class UserLanguageOut(BaseModel):
+    user_id: int
+    language_ids: List[str]
 
 
 UserMeOut = UserOut

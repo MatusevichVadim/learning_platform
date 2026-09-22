@@ -1,1 +1,1 @@
-from . import public, admin, auth, profile
+from . import public, admin, auth, profile, teacher

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from sqlalchemy import select, func, or_, asc, desc
 from sqlalchemy.orm import Session
 
+from ..access import ensure_lesson_access, get_user_language_ids, visible_lessons_condition
 from ..models import Submission, Task, Lesson, User, Language
 from ..schemas import ProfileSummary, SubmissionDetail
 from ..rating import effective_rating
@@ -23,33 +24,57 @@ def get_card(
     current_user: User = Depends(get_current_user),
 ):
     user_id = current_user.id
+    language_ids = get_user_language_ids(db, current_user)
+    visible_lesson = Lesson.language_id.in_(language_ids)
 
     total_submissions = db.execute(
-        select(func.count(Submission.id)).where(Submission.user_id == user_id)
+        select(func.count(Submission.id))
+        .select_from(Submission)
+        .join(Task, Task.id == Submission.task_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Submission.user_id == user_id, visible_lesson)
     ).scalar() or 0
     correct_submissions = db.execute(
-        select(func.count(Submission.id)).where(Submission.user_id == user_id, Submission.is_correct == True)
+        select(func.count(Submission.id))
+        .select_from(Submission)
+        .join(Task, Task.id == Submission.task_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Submission.user_id == user_id, Submission.is_correct == True, visible_lesson)
     ).scalar() or 0
     pending_submissions = db.execute(
-        select(func.count(Submission.id)).where(Submission.user_id == user_id, Submission.status == "pending")
+        select(func.count(Submission.id))
+        .select_from(Submission)
+        .join(Task, Task.id == Submission.task_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Submission.user_id == user_id, Submission.status == "pending", visible_lesson)
     ).scalar() or 0
     solved_tasks = db.execute(
-        select(func.count(func.distinct(Submission.task_id))).where(Submission.user_id == user_id, Submission.is_correct == True)
+        select(func.count(func.distinct(Submission.task_id)))
+        .select_from(Submission)
+        .join(Task, Task.id == Submission.task_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Submission.user_id == user_id, Submission.is_correct == True, visible_lesson)
     ).scalar() or 0
     solved_code_tasks = db.execute(
         select(func.count(func.distinct(Submission.task_id)))
         .select_from(Submission)
         .join(Task, Task.id == Submission.task_id)
-        .where(Submission.user_id == user_id, Submission.is_correct == True, Task.kind == "code")
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Submission.user_id == user_id, Submission.is_correct == True, Task.kind == "code", visible_lesson)
     ).scalar() or 0
     solved_quiz_tasks = db.execute(
         select(func.count(func.distinct(Submission.task_id)))
         .select_from(Submission)
         .join(Task, Task.id == Submission.task_id)
-        .where(Submission.user_id == user_id, Submission.is_correct == True, Task.kind == "quiz")
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Submission.user_id == user_id, Submission.is_correct == True, Task.kind == "quiz", visible_lesson)
     ).scalar() or 0
     attempted_tasks = db.execute(
-        select(func.count(func.distinct(Submission.task_id))).where(Submission.user_id == user_id)
+        select(func.count(func.distinct(Submission.task_id)))
+        .select_from(Submission)
+        .join(Task, Task.id == Submission.task_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Submission.user_id == user_id, visible_lesson)
     ).scalar() or 0
 
     success_rate = round((correct_submissions / total_submissions * 100), 1) if total_submissions else 0.0
@@ -65,7 +90,7 @@ def get_card(
         .join(Task, Task.id == Submission.task_id)
         .join(Lesson, Lesson.id == Task.lesson_id)
         .join(Language, Language.id == Lesson.language_id)
-        .where(Submission.user_id == user_id)
+        .where(Submission.user_id == user_id, visible_lesson)
     )
 
     if search:
@@ -115,7 +140,8 @@ def get_card(
     lesson_ids = db.execute(
         select(func.distinct(Task.lesson_id))
         .join(Submission, Submission.task_id == Task.id)
-        .where(Submission.user_id == user_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Submission.user_id == user_id, visible_lesson)
     ).scalars().all()
 
     lesson_progress = []
@@ -183,16 +209,28 @@ def get_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    language_ids = get_user_language_ids(db, current_user)
+    visible_lesson = visible_lessons_condition(current_user, language_ids)
+
     # Total solved unique tasks
     solved_stmt = (
         select(func.count(func.distinct(Submission.task_id)))
+        .select_from(Submission)
+        .join(Task, Task.id == Submission.task_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
         .where(Submission.user_id == current_user.id)
-        .where(Submission.is_correct == True)
+        .where(Submission.is_correct == True, visible_lesson)
     )
     total_solved = db.execute(solved_stmt).scalar() or 0
 
     # Total submissions
-    total_submissions_stmt = select(func.count(Submission.id)).where(Submission.user_id == current_user.id)
+    total_submissions_stmt = (
+        select(func.count(Submission.id))
+        .select_from(Submission)
+        .join(Task, Task.id == Submission.task_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .where(Submission.user_id == current_user.id, visible_lesson)
+    )
     total_submissions = db.execute(total_submissions_stmt).scalar() or 0
 
     # Success rate
@@ -203,8 +241,7 @@ def get_summary(
         select(Lesson.language, func.count(func.distinct(Submission.task_id)).label("solved"))
         .join(Task, Task.lesson_id == Lesson.id)
         .join(Submission, Submission.task_id == Task.id)
-        .where(Submission.user_id == current_user.id)
-        .where(Submission.is_correct == True)
+        .where(Submission.user_id == current_user.id, Submission.is_correct == True, visible_lesson)
         .group_by(Lesson.language)
     )
     langs_rows = db.execute(langs_stmt).all()
@@ -229,11 +266,13 @@ def get_submissions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
+    language_ids = get_user_language_ids(db, current_user)
+    visible_lesson = visible_lessons_condition(current_user, language_ids)
     base_stmt = (
         select(Submission, Task, Lesson)
         .join(Task, Task.id == Submission.task_id)
         .join(Lesson, Lesson.id == Task.lesson_id)
-        .where(Submission.user_id == current_user.id)
+        .where(Submission.user_id == current_user.id, visible_lesson)
         .order_by(Submission.created_at.desc())
     )
 
@@ -293,6 +332,7 @@ def get_submission_detail(
         raise HTTPException(status_code=404, detail="Submission not found")
 
     s, task, lesson = row
+    ensure_lesson_access(db, current_user, lesson)
     return SubmissionDetail(
         id=s.id,
         task_id=s.task_id,

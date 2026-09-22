@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { adminUsers, adminUserCard, createUser, resetUserPassword, toggleUserStatus, updateUser, deleteUser } from '../../api'
+import { adminUsers, adminUserCard, createUser, resetUserPassword, toggleUserStatus, updateUser, deleteUser, adminListLanguages, adminGetUserLanguages, adminSetUserLanguages } from '../../api'
 import CardChart from '../../components/CardChart'
 import LessonProgress from '../../components/LessonProgress'
 import { formatDateTime } from '../../utils/date'
@@ -14,7 +14,10 @@ type User = {
   created_at: string
   rating?: number
   rating_bonus?: number
+  user_class?: string
 }
+
+type Language = { id: string; name: string; image_url?: string }
 
 // Must match the backend PasswordReset schema (min_length=4) to avoid 422 errors.
 const MIN_PASSWORD_LENGTH = 4
@@ -23,12 +26,17 @@ export default function UsersTab() {
   const [users, setUsers] = useState<User[]>([])
   const [showModal, setShowModal] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [form, setForm] = useState({ username: '', password: '', full_name: '', role: 'user', rating_bonus: 0 })
+  const [form, setForm] = useState({ username: '', password: '', full_name: '', role: 'user', user_class: '', rating_bonus: 0 })
   const [resetPasswordId, setResetPasswordId] = useState<number | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [deleteUserId, setDeleteUserId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [languages, setLanguages] = useState<Language[]>([])
+  const [languageModalUser, setLanguageModalUser] = useState<User | null>(null)
+  const [selectedLanguageIds, setSelectedLanguageIds] = useState<string[]>([])
+  const [selectedLanguageId, setSelectedLanguageId] = useState('')
+  const [languageSaveLoading, setLanguageSaveLoading] = useState(false)
 
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('created_at')
@@ -41,6 +49,7 @@ export default function UsersTab() {
   const [cardLoading, setCardLoading] = useState(false)
   const [cardError, setCardError] = useState('')
   const [cardUser, setCardUser] = useState<User | null>(null)
+  const [showCard, setShowCard] = useState(false)
   const [cardSearch, setCardSearch] = useState('')
   const [cardSortBy, setCardSortBy] = useState('created_at')
   const [cardOrder, setCardOrder] = useState<'asc' | 'desc'>('desc')
@@ -55,7 +64,12 @@ export default function UsersTab() {
     return () => clearTimeout(t)
   }, [cardSearch])
 
+  useEffect(() => {
+    loadLanguages()
+  }, [])
+
   async function openCard(user: User) {
+    setShowCard(true)
     setCardUser(user)
     setCardData(null)
     setCardError('')
@@ -68,6 +82,12 @@ export default function UsersTab() {
     } finally {
       setCardLoading(false)
     }
+  }
+
+  function closeCard() {
+    setShowCard(false)
+    setCardData(null)
+    setCardUser(null)
   }
 
   async function reloadCard(searchArg?: string, sortByArg?: string, orderArg?: 'asc' | 'desc') {
@@ -93,15 +113,71 @@ export default function UsersTab() {
     setUsers(data as User[])
   }
 
+  async function loadLanguages() {
+    try {
+      const data = await adminListLanguages()
+      setLanguages(data)
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || 'Ошибка загрузки языков')
+    }
+  }
+
+  async function openLanguageModal(user: User) {
+    setLanguageModalUser(user)
+    setSelectedLanguageIds([])
+    setSelectedLanguageId('')
+    try {
+      const data = await adminGetUserLanguages(user.id)
+      setSelectedLanguageIds(data.language_ids)
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || 'Ошибка загрузки языков ученика')
+    }
+  }
+
+  async function addLanguage() {
+    if (!languageModalUser || !selectedLanguageId) return
+    setLanguageSaveLoading(true)
+    setMessage('')
+    try {
+      const nextLanguageIds = [...selectedLanguageIds, selectedLanguageId]
+      await adminSetUserLanguages(languageModalUser.id, nextLanguageIds)
+      setSelectedLanguageIds(nextLanguageIds)
+      setSelectedLanguageId('')
+      setMessage('Язык назначен')
+      loadUsers()
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || 'Ошибка назначения языка')
+    } finally {
+      setLanguageSaveLoading(false)
+    }
+  }
+
+  async function removeLanguage(languageId: string) {
+    if (!languageModalUser) return
+    setLanguageSaveLoading(true)
+    setMessage('')
+    try {
+      const nextLanguageIds = selectedLanguageIds.filter(id => id !== languageId)
+      await adminSetUserLanguages(languageModalUser.id, nextLanguageIds)
+      setSelectedLanguageIds(nextLanguageIds)
+      setMessage('Язык отозван')
+      loadUsers()
+    } catch (err: any) {
+      setMessage(err.response?.data?.detail || 'Ошибка отзыва языка')
+    } finally {
+      setLanguageSaveLoading(false)
+    }
+  }
+
   function openAddModal() {
     setEditingUser(null)
-    setForm({ username: '', password: '', full_name: '', role: 'user', rating_bonus: 0 })
+    setForm({ username: '', password: '', full_name: '', role: 'user', user_class: '', rating_bonus: 0 })
     setShowModal(true)
   }
 
   function openEditModal(user: User) {
     setEditingUser(user)
-    setForm({ username: user.username, password: '', full_name: user.full_name || '', role: user.role, rating_bonus: user.rating_bonus ?? 0 })
+    setForm({ username: user.username, password: '', full_name: user.full_name || '', role: user.role, user_class: user.user_class || '', rating_bonus: user.rating_bonus ?? 0 })
     setShowModal(true)
   }
 
@@ -112,10 +188,12 @@ export default function UsersTab() {
     try {
       if (editingUser) {
         await updateUser(editingUser.id, {
+          username: form.username,
           full_name: form.full_name || undefined,
           role: form.role,
           is_active: editingUser.is_active,
           rating_bonus: Number(form.rating_bonus) || 0,
+          user_class: form.user_class || undefined,
         })
         setMessage('Успешно')
       } else {
@@ -124,6 +202,7 @@ export default function UsersTab() {
           password: form.password,
           full_name: form.full_name || undefined,
           role: form.role,
+          user_class: form.user_class || undefined,
         })
         setMessage('Успешно')
       }
@@ -187,7 +266,7 @@ export default function UsersTab() {
         </button>
       </div>
 
-      {message && <div style={{ marginBottom: 12, color: message === 'Успешно' ? '#3dd179' : '#dc3545' }}>{message}</div>}
+      {message && <div style={{ marginBottom: 12, color: message === 'Успешно' || message === 'Языки ученика обновлены' ? '#3dd179' : '#dc3545' }}>{message}</div>}
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <input
@@ -205,6 +284,7 @@ export default function UsersTab() {
           <option value="role">{'Роль'}</option>
           <option value="is_active">{'Статус'}</option>
           <option value="rating">{'Рейтинг'}</option>
+          <option value="user_class">{'Класс'}</option>
         </select>
         <button
           className="btn"
@@ -223,6 +303,7 @@ export default function UsersTab() {
               <th style={{ padding: 10, textAlign: 'left' }}>{'Логин'}</th>
               <th style={{ padding: 10, textAlign: 'left' }}>{'ФИО'}</th>
               <th style={{ padding: 10, textAlign: 'left' }}>{'Роль'}</th>
+              <th style={{ padding: 10, textAlign: 'left' }}>{'Класс'}</th>
               <th style={{ padding: 10, textAlign: 'left' }}>{'Активен'}</th>
               <th style={{ padding: 10, textAlign: 'left' }}>{'Рейтинг'}</th>
               <th style={{ padding: 10, textAlign: 'left' }}>{'Дата создания'}</th>
@@ -235,7 +316,8 @@ export default function UsersTab() {
                 <td style={{ padding: 10 }}>{user.id}</td>
                 <td style={{ padding: 10 }}>{user.username}</td>
                 <td style={{ padding: 10 }}>{user.full_name ? user.full_name : '-'}</td>
-                <td style={{ padding: 10 }}>{user.role === 'admin' ? 'Администратор' : 'Пользователь'}</td>
+                <td style={{ padding: 10 }}>{user.role === 'admin' ? 'Администратор' : user.role === 'teacher' ? 'Учитель' : 'Пользователь'}</td>
+                <td style={{ padding: 10 }}>{user.user_class || '-'}</td>
                 <td style={{ padding: 10 }}>
                   <span style={{ color: user.is_active ? '#3dd179' : '#dc3545' }}>
                     {user.is_active ? 'Активен' : 'Заблокирован'}
@@ -247,18 +329,29 @@ export default function UsersTab() {
                 <td style={{ padding: 10 }}>{formatDateTime(user.created_at)}</td>
                 <td style={{ padding: 10 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 4, width: '100%' }}>
                       <button className="btn" onClick={() => openCard(user)} style={{ padding: '4px 8px', fontSize: 12, backgroundColor: '#17a2b8', color: '#fff' }}>
                         {'Личная карточка'}
+                      </button>
+                      {user.role === 'user' && (
+                        <button
+                          className="btn"
+                          onClick={() => openLanguageModal(user)}
+                          style={{ padding: '4px 8px', fontSize: 12, backgroundColor: '#6f42c1', color: '#fff' }}
+                        >
+                          {'Назначить языки'}
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 4, width: '100%' }}>
+                      <button className="btn" onClick={() => openEditModal(user)} style={{ padding: '4px 8px', fontSize: 12 }}>
+                        {'Редактировать'}
                       </button>
                       <button className="btn" onClick={() => setResetPasswordId(user.id)} style={{ padding: '4px 8px', fontSize: 12, backgroundColor: '#ffc107', color: '#000' }}>
                         {'Сбросить пароль'}
                       </button>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      <button className="btn" onClick={() => openEditModal(user)} style={{ padding: '4px 8px', fontSize: 12 }}>
-                        {'Редактировать'}
-                      </button>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 4, width: '100%' }}>
                       <button className="btn" onClick={() => handleToggleStatus(user.id)} style={{ padding: '4px 8px', fontSize: 12, backgroundColor: user.is_active ? '#dc3545' : '#3dd179', color: user.is_active ? '#fff' : '#092013' }}>
                         {user.is_active ? 'Заблокировать' : 'Разблокировать'}
                       </button>
@@ -272,7 +365,7 @@ export default function UsersTab() {
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={7} style={{ padding: 20, textAlign: 'center', color: '#888' }}>{'Нет данных'}</td>
+                <td colSpan={8} style={{ padding: 20, textAlign: 'center', color: '#888' }}>{'Нет данных'}</td>
               </tr>
             )}
           </tbody>
@@ -280,22 +373,24 @@ export default function UsersTab() {
       </div>
 
       {showModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="card" style={{ width: 400, maxHeight: '90vh', overflow: 'auto' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowModal(false)}>
+          <div className="card" style={{ width: 400, maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
             <h3>{editingUser ? 'Редактировать пользователя' : 'Добавить пользователя'}</h3>
             <form onSubmit={handleSubmit}>
-              <input className="input" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} placeholder={'Логин'} disabled={!!editingUser} />
+              <input className="input" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} placeholder={'Логин'} />
               {!editingUser && (
                 <input className="input" type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder={'Пароль'} style={{ marginTop: 12 }} />
               )}
               <input className="input" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} placeholder={'ФИО'} style={{ marginTop: 12 }} />
+              <input className="input" value={form.user_class} onChange={e => setForm({ ...form, user_class: e.target.value })} placeholder={'Класс'} style={{ marginTop: 12 }} />
               <select className="input" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} style={{ marginTop: 12 }}>
                 <option value="user">{'Пользователь'}</option>
+                <option value="teacher">{'Учитель'}</option>
                 <option value="admin">{'Администратор'}</option>
               </select>
               {editingUser && (
                 <div style={{ marginTop: 12 }}>
-                  <label style={{ display: 'block', marginBottom: 6 }}>{'Бонус рейтинга (вручную)'}</label>
+                  <label style={{ display: 'block', marginBottom: 6 }}>{'Изменить рейтинг'}</label>
                   <input
                     className="input"
                     type="number"
@@ -318,8 +413,8 @@ export default function UsersTab() {
       )}
 
       {resetPasswordId && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="card" style={{ width: 400 }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setResetPasswordId(null); setNewPassword('') }}>
+          <div className="card" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
             <h3>{'Сбросить пароль'}</h3>
             <input className="input" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder={'Пароль (минимум 4 символа)'} />
             {newPassword.length > 0 && newPassword.length < MIN_PASSWORD_LENGTH && (
@@ -348,7 +443,54 @@ export default function UsersTab() {
         </div>
       )}
 
-      {cardLoading && (
+      {languageModalUser && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setLanguageModalUser(null)}>
+          <div className="card" style={{ width: 460, maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <h3>{`Языки: ${languageModalUser.full_name || languageModalUser.username}`}</h3>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', marginBottom: 6 }}>{'Уже назначенные языки'}</label>
+              {selectedLanguageIds.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                  {selectedLanguageIds.map(languageId => {
+                    const language = languages.find(item => item.id === languageId)
+                    return (
+                      <span key={languageId} style={{ backgroundColor: '#101a2a', border: '1px solid #243049', borderRadius: '6px', padding: '4px 10px', fontSize: 13, color: '#e6edf3' }}>
+                        {language?.name || languageId}
+                        <button
+                          onClick={() => removeLanguage(languageId)}
+                          disabled={languageSaveLoading}
+                          style={{ background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer', marginLeft: 6, fontSize: 12 }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div style={{ color: '#888', fontSize: 13, marginBottom: 12 }}>{'Нет назначенных языков'}</div>
+              )}
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', marginBottom: 6 }}>{'Добавить язык'}</label>
+              <select className="input" value={selectedLanguageId} onChange={e => setSelectedLanguageId(e.target.value)} style={{ fontSize: 14 }}>
+                <option value="">{ 'Выберите язык...' }</option>
+                {languages
+                  .filter(language => !selectedLanguageIds.includes(language.id))
+                  .map(language => (
+                    <option key={language.id} value={language.id}>{language.name}</option>
+                  ))}
+              </select>
+            </div>
+            <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn" onClick={() => { setLanguageModalUser(null); setSelectedLanguageIds([]); setSelectedLanguageId('') }} style={{ backgroundColor: '#6c757d' }}>{'Закрыть'}</button>
+              <button className="btn" onClick={addLanguage} disabled={languageSaveLoading || !selectedLanguageId} style={{ backgroundColor: '#3dd179', color: '#092013' }}>{languageSaveLoading ? '...' : 'Назначить'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCard && cardLoading && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card" style={{ width: 420, textAlign: 'center' }}>
             <p style={{ color: '#a9b1bb' }}>{'Загрузка карточки...'}</p>
@@ -356,8 +498,8 @@ export default function UsersTab() {
         </div>
       )}
 
-      {!cardLoading && cardData && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setCardData(null)}>
+      {showCard && !cardLoading && cardData && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={closeCard}>
           <div className="card" style={{ width: 720, maxWidth: '95vw', maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div>
@@ -367,12 +509,13 @@ export default function UsersTab() {
                   <span style={{ fontSize: 14, fontWeight: 600, color: '#17a2b8' }}>{'Место: '}{cardData.user.rank ?? '-'}</span>
                 </h3>
                 <div style={{ color: '#a9b1bb', fontSize: 13, marginTop: 4 }}>
-                  {cardData.user.username} · {cardData.user.role === 'admin' ? 'Администратор' : 'Пользователь'} ·{' '}
+                  {cardData.user.username} ·                   {cardData.user.role === 'admin' ? 'Администратор' : cardData.user.role === 'teacher' ? 'Учитель' : 'Пользователь'} ·{' '}
+                  {cardData.user.user_class && <span style={{ color: '#f39c12' }}>Класс: {cardData.user.user_class} · </span>}
                   <span style={{ color: cardData.user.is_active ? '#3dd179' : '#dc3545' }}>{cardData.user.is_active ? 'Активен' : 'Заблокирован'}</span>
                 </div>
                 <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>{'Регистрация: '}{formatDateTime(cardData.user.created_at)}</div>
               </div>
-              <button onClick={() => setCardData(null)} style={{ background: 'none', border: 'none', color: '#a9b1bb', fontSize: 22, cursor: 'pointer' }}>×</button>
+              <button onClick={closeCard} style={{ background: 'none', border: 'none', color: '#a9b1bb', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
 
             {cardError && <div style={{ color: '#dc3545', marginBottom: 12 }}>{cardError}</div>}
@@ -393,7 +536,7 @@ export default function UsersTab() {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <h4 style={{ margin: 0 }}>{'Решения'}</h4>
-              <button className="btn" onClick={() => { const u = cardData.user.username; setCardData(null); navigate(`/admin/user/${encodeURIComponent(u)}/submissions`) }} style={{ backgroundColor: '#007bff', color: '#fff', fontSize: 12, padding: '4px 10px' }}>
+              <button className="btn" onClick={() => { const u = cardData.user.username; closeCard(); navigate(`/admin/user/${encodeURIComponent(u)}/submissions`) }} style={{ backgroundColor: '#007bff', color: '#fff', fontSize: 12, padding: '4px 10px' }}>
                 {'Все решения'}
               </button>
             </div>

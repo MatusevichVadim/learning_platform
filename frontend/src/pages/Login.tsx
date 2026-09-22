@@ -15,7 +15,13 @@ export default function Login() {
     if (userStr) {
       try {
         const user = JSON.parse(userStr)
-        navigate(user.role === 'admin' ? '/admin' : '/', { replace: true })
+        if (user.role === 'admin') {
+          navigate('/admin', { replace: true })
+        } else if (user.role === 'teacher') {
+          navigate('/teacher', { replace: true })
+        } else {
+          navigate('/', { replace: true })
+        }
       } catch {
         localStorage.removeItem('user')
       }
@@ -29,7 +35,13 @@ export default function Login() {
     try {
       const data = await login(username, password)
       const role = data.user?.role ?? data.role
-      navigate(role === 'admin' ? '/admin' : '/', { replace: true })
+      if (role === 'admin') {
+        navigate('/admin', { replace: true })
+      } else if (role === 'teacher') {
+        navigate('/teacher', { replace: true })
+      } else {
+        navigate('/', { replace: true })
+      }
     } catch (err: any) {
       setError('Неверный логин или пароль')
     } finally {

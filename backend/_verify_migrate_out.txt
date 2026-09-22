@@ -1,0 +1,58 @@
+=== counts ===
+  languages: 5
+  users: 61
+  lessons: 34
+  tasks: 548
+  submissions: 2234
+  teacher_classes: 1
+  user_languages: 0
+=== languages ===
+   ('cpp', 'C++', 1, '/uploads/lang_cpp_3c0c4574.png', '2026-01-30 20:13:42.987793')
+   ('csharp', 'C#', 0, None, '2026-09-15 19:15:17.712306')
+   ('javascript', 'JavaScript', 1, '/uploads/lang_javascript_87fad4dd.png', '2026-03-23 06:00:14.290490')
+   ('python', 'Python', 0, None, '2026-09-15 19:15:17.712306')
+   ('sql', 'SQL', 1, '/uploads/lang_sql_6e0fe15f.png', '2026-03-01 06:10:10.050294')
+=== teacher_classes (must be unchanged) ===
+   (11, '10A')
+=== user_languages (must be unchanged) ===
+=== current submissions (must be unchanged) ===
+   (1, 2, 2, None, 'xxzxc', 1, 'Правильно', 'completed', '2026-09-16 13:06:02.573808')
+   (2, 2, 12, None, 'asdasd', 0, 'Ожидает проверки администратором', 'pending', '2026-09-16 13:06:09.460363')
+=== sample migrated users (new) ===
+   (25, 'Катя', 'user', None)
+   (26, 'анна', 'user', None)
+   (27, 'ИВАН', 'user', None)
+   (28, 'даник', 'user', None)
+   (29, 'Рома', 'user', None)
+   (40, 'Volodya', 'user', None)
+   (43, 'Никита_2', 'user', None)
+   (46, 'Аня', 'user', None)
+   (47, 'даник_2', 'user', None)
+   (48, 'рома_2', 'user', None)
+   (49, 'Антон_2', 'user', None)
+   (51, 'Катя_2', 'user', None)
+   (54, 'артем', 'user', None)
+   (57, 'Катя_3', 'user', None)
+   (61, 'даник_3', 'user', None)
+=== sample migrated lessons ===
+   (1, 'python', 'Python Lesson 1')
+   (2, 'python', 'Python Lesson 2')
+   (3, 'python', 'Python Lesson 3')
+   (4, 'python', 'Python Lesson 4')
+   (5, 'python', 'Python Lesson 5')
+   (6, 'csharp', 'Csharp Lesson 1')
+   (7, 'csharp', 'Csharp Lesson 2')
+   (8, 'csharp', 'Csharp Lesson 3')
+=== sample migrated submissions ===
+   (1, 2, 2, 'completed')
+   (2, 2, 12, 'pending')
+   (152, 25, 27, 'completed')
+   (153, 26, 27, 'completed')
+   (154, 26, 29, 'completed')
+=== orphan check ===
+  submissions.user_id -> users: orphans=0
+  submissions.task_id -> tasks: orphans=0
+  tasks.lesson_id -> lessons: orphans=0
+  lessons.language_id -> languages: orphans=0
+=== sqlite integrity ===
+   ('ok',)

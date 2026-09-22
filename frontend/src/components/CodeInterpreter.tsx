@@ -3,10 +3,11 @@ import { python } from '@codemirror/lang-python'
 import { java } from '@codemirror/lang-java'
 import { oneDark } from '@codemirror/theme-one-dark'
 
-export default function CodeInterpreter({ value, onChange, language }: {
+export default function CodeInterpreter({ value, onChange, language, readOnly }: {
   value: string,
   onChange: (value: string) => void,
-  language: string
+  language: string,
+  readOnly?: boolean
 }): JSX.Element {
 
   const getExtensions = () => {
@@ -25,6 +26,8 @@ export default function CodeInterpreter({ value, onChange, language }: {
       extensions={getExtensions()}
       theme={oneDark}
       height="200px"
+      readOnly={readOnly}
+      editable={readOnly === true ? false : undefined}
     />
   )
 }
