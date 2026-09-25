@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Annotated
 
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..access import ensure_language_access, ensure_lesson_access, get_user_language_ids, visible_lessons_condition
 from ..models import Language, Lesson, Task, Submission, User
-from ..checker import run_python_tests
+from ..checker import run_python_tests, run_python_tests_async
 from ..rating import recompute_user_rating, effective_rating
 from ..schemas import UserOut, LessonOut, TaskOut, SubmitQuiz, SubmitCode, SubmissionOut
 from ..deps import get_current_user, get_db
@@ -181,7 +182,7 @@ def submit_quiz(task_id: int, payload: SubmitQuiz, user: User = Depends(get_curr
 
 
 @router.post("/tasks/{task_id}/submit-code", response_model=SubmissionOut)
-def submit_code(task_id: int, payload: SubmitCode, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def submit_code(task_id: int, payload: SubmitCode, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     task = db.get(Task, task_id)
     if not task or task.kind != "code":
         raise HTTPException(status_code=404, detail="Task not found or not a code task")
@@ -232,7 +233,9 @@ def submit_code(task_id: int, payload: SubmitCode, user: User = Depends(get_curr
 
     # Execute the user's code in the isolated sandbox and grade it server-side.
     # The client cannot influence the outcome (no trusted markers).
-    ok, result = run_python_tests(payload.code, task.test_spec or "{}")
+    # Uses async execution to avoid blocking the event loop when many users
+    # submit code simultaneously.
+    ok, result = await run_python_tests_async(payload.code, task.test_spec or "{}")
     passed = isinstance(result, dict) and result.get("ok") is True
 
     if passed:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func, or_, asc, desc, insert, delete
+from sqlalchemy import select, func, or_, asc, desc, insert, delete, case, and_
 from sqlalchemy.orm import Session
 
 from ..auth import get_password_hash
@@ -160,33 +160,29 @@ def get_student_card(
 
     user_id = student.id
 
-    total_submissions = db.execute(
-        select(func.count(Submission.id)).where(Submission.user_id == user_id)
-    ).scalar() or 0
-    correct_submissions = db.execute(
-        select(func.count(Submission.id)).where(Submission.user_id == user_id, Submission.is_correct == True)
-    ).scalar() or 0
-    pending_submissions = db.execute(
-        select(func.count(Submission.id)).where(Submission.user_id == user_id, Submission.status == "pending")
-    ).scalar() or 0
-    solved_tasks = db.execute(
-        select(func.count(func.distinct(Submission.task_id))).where(Submission.user_id == user_id, Submission.is_correct == True)
-    ).scalar() or 0
-    solved_code_tasks = db.execute(
-        select(func.count(func.distinct(Submission.task_id)))
+    # --- Combined stats query: 7 separate count queries → 1 query ---
+    stats_row = db.execute(
+        select(
+            func.count().label("total_submissions"),
+            func.count(case((Submission.is_correct == True, 1), else_=None)).label("correct_submissions"),
+            func.count(case((Submission.status == "pending", 1), else_=None)).label("pending_submissions"),
+            func.count(func.distinct(case((Submission.is_correct == True, Submission.task_id), else_=None))).label("solved_tasks"),
+            func.count(func.distinct(case((and_(Submission.is_correct == True, Task.kind == "code"), Submission.task_id), else_=None))).label("solved_code_tasks"),
+            func.count(func.distinct(case((and_(Submission.is_correct == True, Task.kind == "quiz"), Submission.task_id), else_=None))).label("solved_quiz_tasks"),
+            func.count(func.distinct(Submission.task_id)).label("attempted_tasks"),
+        )
         .select_from(Submission)
         .join(Task, Task.id == Submission.task_id)
-        .where(Submission.user_id == user_id, Submission.is_correct == True, Task.kind == "code")
-    ).scalar() or 0
-    solved_quiz_tasks = db.execute(
-        select(func.count(func.distinct(Submission.task_id)))
-        .select_from(Submission)
-        .join(Task, Task.id == Submission.task_id)
-        .where(Submission.user_id == user_id, Submission.is_correct == True, Task.kind == "quiz")
-    ).scalar() or 0
-    attempted_tasks = db.execute(
-        select(func.count(func.distinct(Submission.task_id))).where(Submission.user_id == user_id)
-    ).scalar() or 0
+        .where(Submission.user_id == user_id)
+    ).first()
+
+    total_submissions = stats_row.total_submissions or 0
+    correct_submissions = stats_row.correct_submissions or 0
+    pending_submissions = stats_row.pending_submissions or 0
+    solved_tasks = stats_row.solved_tasks or 0
+    solved_code_tasks = stats_row.solved_code_tasks or 0
+    solved_quiz_tasks = stats_row.solved_quiz_tasks or 0
+    attempted_tasks = stats_row.attempted_tasks or 0
 
     success_rate = round((correct_submissions / total_submissions * 100), 1) if total_submissions else 0.0
 
@@ -243,36 +239,33 @@ def get_student_card(
             "created_at": s.created_at,
         })
 
-    lesson_ids = db.execute(
-        select(func.distinct(Task.lesson_id))
+    # --- Combined lesson progress query: N+1 (2 queries per lesson) → 1 query ---
+    lesson_progress_stmt = (
+        select(
+            Lesson.id,
+            Lesson.title,
+            Language.name,
+            func.count(Task.id).label("total_tasks"),
+            func.count(func.distinct(case((Submission.is_correct == True, Submission.task_id), else_=None))).label("solved_tasks"),
+        )
+        .select_from(Lesson)
+        .join(Language, Language.id == Lesson.language_id)
+        .join(Task, Task.lesson_id == Lesson.id)
         .join(Submission, Submission.task_id == Task.id)
         .where(Submission.user_id == user_id)
-    ).scalars().all()
-
+        .group_by(Lesson.id, Lesson.title, Language.name)
+    )
+    lesson_rows = db.execute(lesson_progress_stmt).all()
     lesson_progress = []
-    if lesson_ids:
-        lesson_rows = db.execute(
-            select(Lesson.id, Lesson.title, Language.name)
-            .join(Language, Language.id == Lesson.language_id)
-            .where(Lesson.id.in_(lesson_ids))
-        ).all()
-        for lid, ltitle, lname in lesson_rows:
-            total_tasks = db.execute(
-                select(func.count(Task.id)).where(Task.lesson_id == lid)
-            ).scalar() or 0
-            solved_tasks_lp = db.execute(
-                select(func.count(func.distinct(Submission.task_id)))
-                .join(Task, Task.id == Submission.task_id)
-                .where(Submission.user_id == user_id, Submission.is_correct == True, Task.lesson_id == lid)
-            ).scalar() or 0
-            lesson_progress.append({
-                "lesson_id": int(lid),
-                "lesson_title": ltitle,
-                "language": lname,
-                "total_tasks": total_tasks,
-                "solved_tasks": solved_tasks_lp,
-            })
-        lesson_progress.sort(key=lambda x: (x["language"], x["lesson_title"]))
+    for lid, ltitle, lname, total_tasks, solved_tasks_lp in lesson_rows:
+        lesson_progress.append({
+            "lesson_id": int(lid),
+            "lesson_title": ltitle,
+            "language": lname,
+            "total_tasks": total_tasks or 0,
+            "solved_tasks": solved_tasks_lp or 0,
+        })
+    lesson_progress.sort(key=lambda x: (x["language"], x["lesson_title"]))
 
     user_rank = db.execute(
         select(func.count(User.id)).where(
@@ -471,22 +464,35 @@ def lesson_status_teacher(lesson_id: int, current_user: User = Depends(get_curre
         select(User.id).where(User.user_class.in_(classes), User.role == "user")
     ).scalars().all()
 
-    # Return status for each student
+    if not student_ids:
+        return {}
+
+    # Fetch all submissions for all students in a single query (N+1 → 1).
+    # Order by user_id, task_id, then created_at DESC so the first row for
+    # each (user_id, task_id) pair is the latest submission.
+    all_subs = db.execute(
+        select(Submission)
+        .where(
+            Submission.user_id.in_(student_ids),
+            Submission.task_id.in_(task_ids),
+        )
+        .order_by(Submission.user_id, Submission.task_id, Submission.created_at.desc(), Submission.id.desc())
+    ).scalars().all()
+
+    # Build latest submission per (user_id, task_id) in Python.
+    latest_per_user: dict[int, dict[int, bool | None]] = {}
+    for s in all_subs:
+        user_latest = latest_per_user.setdefault(s.user_id, {})
+        if s.task_id not in user_latest:
+            if s.status == "pending":
+                user_latest[s.task_id] = None
+            else:
+                user_latest[s.task_id] = s.is_correct
+
     result = {}
     for sid in student_ids:
-        subs = db.execute(
-            select(Submission)
-            .where(Submission.user_id == sid, Submission.task_id.in_(task_ids))
-            .order_by(Submission.created_at.desc())
-        ).scalars().all()
-        latest: dict[int, bool | None] = {}
-        for s in subs:
-            if s.task_id not in latest:
-                if s.status == "pending":
-                    latest[s.task_id] = None
-                else:
-                    latest[s.task_id] = s.is_correct
-        result[str(sid)] = {str(k): latest.get(k, None) for k in task_ids}
+        user_latest = latest_per_user.get(sid, {})
+        result[str(sid)] = {str(k): user_latest.get(k, None) for k in task_ids}
     return result
 
 

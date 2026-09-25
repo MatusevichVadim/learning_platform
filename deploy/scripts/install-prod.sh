@@ -66,7 +66,10 @@ chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 echo "[prod] Installing systemd units..."
 cp deploy/systemd/learning-backend.service /etc/systemd/system/
 cp deploy/systemd/learning-frontend.service /etc/systemd/system/ 2>/dev/null || true
-sed -i "s|__APP_DIR__|$APP_DIR|g; s|__APP_USER__|$APP_USER|g; s|__BACKEND_PORT__|$BACKEND_PORT|g" /etc/systemd/system/learning-backend.service
+# Calculate worker count: 2 * CPU cores + 1 (common formula for Gunicorn)
+WORKERS=$(nproc 2>/dev/null || echo 2)
+WORKERS=$((WORKERS * 2 + 1))
+sed -i "s|__APP_DIR__|$APP_DIR|g; s|__APP_USER__|$APP_USER|g; s|__BACKEND_PORT__|$BACKEND_PORT|g; s|__WORKERS__|$WORKERS|g" /etc/systemd/system/learning-backend.service
 systemctl daemon-reload
 systemctl enable learning-backend.service
 

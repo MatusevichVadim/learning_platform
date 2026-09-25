@@ -34,56 +34,84 @@ export default function SubmissionsTab() {
   const [copiedCode, setCopiedCode] = useState(false)
   const navigate = useNavigate()
 
-  // Filter states
+  // Filter states.  All filtering/sorting is performed by the server: the
+  // previous client-side approach requested 100_000 rows on every filter
+  // change, which made SQLite read and join the whole submissions table
+  // (code/result blobs included) and spiked disk IOPS into the tens of
+  // thousands.  A single indexed page read is all we need now.
   const [statusFilter, setStatusFilter] = useState('')
   const [classFilter, setClassFilter] = useState('')
   const [lessonFilter, setLessonFilter] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  // Filtered mode states (when any filter is active, fetch all data and paginate client-side)
-  const [filteredData, setFilteredData] = useState<Submission[]>([])
-  const [filteredPage, setFilteredPage] = useState(1)
-  const [isFilteredMode, setIsFilteredMode] = useState(false)
+  // The table is always ordered by date, newest first (the server default).
+  const [loadError, setLoadError] = useState('')
 
-  useEffect(() => { refresh() }, [page])
+  // Options for the class/lesson dropdowns.  They cannot be derived from the
+  // loaded page anymore, so they are fetched once from cheap endpoints.
+  const [allClasses, setAllClasses] = useState<string[]>([])
+  const [allLessons, setAllLessons] = useState<{ id: number; title: string; language: string }[]>([])
 
-  // When any filter changes, load all data and filter client-side
+  // Debounce the free-text search so typing does not fire a query per keystroke.
   useEffect(() => {
-    const hasFilters = statusFilter || classFilter || lessonFilter || searchQuery
-    if (hasFilters) {
-      loadFilteredData()
-    } else {
-      setIsFilteredMode(false)
-      refresh()
-    }
-  }, [statusFilter, classFilter, lessonFilter, searchQuery])
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
+
+  // Any filter change must return to the first page.
+  useEffect(() => { setPage(1) }, [statusFilter, classFilter, lessonFilter, debouncedSearch])
+
+  useEffect(() => {
+    refresh()
+  }, [page, pageSize, statusFilter, classFilter, lessonFilter, debouncedSearch])
+
+  // Load dropdown options once.  The dedicated endpoint only returns classes
+  // and lessons that actually have submissions, so picking an option always
+  // yields rows.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await axios.get('/api/admin/submissions/filter-options', { headers: authHeaders() })
+        setAllClasses((res.data?.classes || []).filter(Boolean))
+        setAllLessons(res.data?.lessons || [])
+      } catch (error) {
+        console.error('Failed to load filter options:', error)
+        setLoadError('Не удалось загрузить списки фильтров')
+      }
+    })()
+  }, [])
 
   async function refresh() {
-    const res = await axios.get('/api/admin/submissions', { headers: authHeaders(), params: { page, page_size: pageSize } })
-    setSubmissions(res.data.data)
-    setTotal(res.data.total)
-    setPageSize(res.data.page_size)
-  }
-
-  async function loadFilteredData() {
-    // Fetch all submissions at once for client-side filtering and pagination
-    const res = await axios.get('/api/admin/submissions', { headers: authHeaders(), params: { page: 1, page_size: 100000 } })
-    const allData = res.data.data
-    const filtered = allData.filter(s => {
-      if (statusFilter && s.status !== statusFilter) return false
-      if (classFilter && s.user_class !== classFilter) return false
-      if (lessonFilter && s.lesson_title !== lessonFilter) return false
-      if (searchQuery.trim()) {
-        const q = searchQuery.trim().toLowerCase()
-        if (s.user_name.toLowerCase().includes(q)) return true
-        if (String(s.id).includes(q)) return true
-        return false
-      }
-      return true
-    })
-    setFilteredData(filtered)
-    setIsFilteredMode(true)
-    setFilteredPage(1)
+    setLoading(true)
+    try {
+      const res = await axios.get('/api/admin/submissions', {
+        headers: authHeaders(),
+        params: {
+          page,
+          page_size: pageSize,
+          status: statusFilter,
+          user_class: classFilter,
+          lesson_id: lessonFilter,
+          search: debouncedSearch,
+        },
+      })
+      setSubmissions(res.data.data || [])
+      setTotal(res.data.total || 0)
+      setLoadError('')
+    } catch (error: any) {
+      // Surface the failure instead of silently keeping the old rows, which
+      // made the filter row look completely dead.
+      const status = error?.response?.status
+      const detail = error?.response?.data?.detail
+      setLoadError(
+        `Не удалось загрузить данные${status ? ` (HTTP ${status})` : ''}` +
+        (detail ? `: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}` : '')
+      )
+      console.error('Failed to load submissions:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   function onUserClick(userName: string) {
@@ -172,20 +200,11 @@ export default function SubmissionsTab() {
   }
 
 
-  // Unique values for filter dropdowns (use all available data)
-  const allData = isFilteredMode ? filteredData : submissions
-  const uniqueClasses = [...new Set(allData.map(s => s.user_class).filter(Boolean))]
-  const uniqueLessons = [...new Set(allData.map(s => s.lesson_title).filter(Boolean))]
-
-  // Determine which data to display and paginate
-  const displayTotal = isFilteredMode ? filteredData.length : (total || 0)
-  const displayPage = isFilteredMode ? filteredPage : page
+  // Server-side pagination: the API returns exactly one page of rows.
+  const displayTotal = total || 0
+  const displayPage = page
   const displayPageSize = pageSize
-
-  // Client-side pagination for filtered mode
-  const paginatedData = isFilteredMode
-    ? filteredData.slice((displayPage - 1) * displayPageSize, displayPage * displayPageSize)
-    : submissions
+  const paginatedData = submissions
 
   return (
     <div>
@@ -213,7 +232,7 @@ export default function SubmissionsTab() {
             style={{ backgroundColor: '#151c2c', color: '#e6edf3', border: '1px solid #243049', borderRadius: 6, padding: '6px 10px', fontSize: '13px', minWidth: 120 }}
           >
             <option value="">Все классы</option>
-            {uniqueClasses.map(c => (
+            {allClasses.map(c => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
@@ -227,15 +246,17 @@ export default function SubmissionsTab() {
             style={{ backgroundColor: '#151c2c', color: '#e6edf3', border: '1px solid #243049', borderRadius: 6, padding: '6px 10px', fontSize: '13px', minWidth: 160 }}
           >
             <option value="">Все уроки</option>
-            {uniqueLessons.map(l => (
-              <option key={l} value={l}>{l}</option>
+            {allLessons.map(l => (
+              <option key={l.id} value={l.id}>
+                {l.language} — {l.title}
+              </option>
             ))}
           </select>
         </div>
         {(statusFilter || classFilter || lessonFilter || searchQuery) && (
           <button
             className="btn"
-            onClick={() => { setStatusFilter(''); setClassFilter(''); setLessonFilter(''); setSearchQuery(''); setFilteredPage(1); setPage(1) }}
+            onClick={() => { setStatusFilter(''); setClassFilter(''); setLessonFilter(''); setSearchQuery(''); setPage(1) }}
             style={{ fontSize: '12px', padding: '6px 12px', backgroundColor: '#3dd179', color: '#092013' }}
           >
             Сбросить
@@ -254,6 +275,20 @@ export default function SubmissionsTab() {
         </div>
       </div>
 
+      {loadError && (
+        <div style={{
+          marginBottom: 12,
+          padding: '10px 14px',
+          borderRadius: 6,
+          backgroundColor: '#3d1d24',
+          border: '1px solid #dc3545',
+          color: '#ffb3bd',
+          fontSize: '13px',
+        }}>
+          {loadError}
+        </div>
+      )}
+
       <table style={{
         width: '100%',
         tableLayout: 'fixed',
@@ -265,72 +300,33 @@ export default function SubmissionsTab() {
       }}>
         <thead>
           <tr style={{ backgroundColor: '#16213e' }}>
-            <th style={{
-              padding: '12px 16px',
-              textAlign: 'left',
-              color: '#ffffff',
-              fontWeight: '600',
-              fontSize: '14px',
-              borderBottom: '1px solid #243049',
-              width: '90px',
-              maxWidth: '90px'
-            }}>Номер</th>
-            <th style={{
-              padding: '12px 16px',
-              textAlign: 'left',
-              color: '#ffffff',
-              fontWeight: '600',
-              fontSize: '14px',
-              borderBottom: '1px solid #243049',
-              maxWidth: '180px'
-            }}>Пользователь</th>
-            <th style={{
-              padding: '12px 16px',
-              textAlign: 'left',
-              color: '#ffffff',
-              fontWeight: '600',
-              fontSize: '14px',
-              borderBottom: '1px solid #243049',
-              width: '80px',
-              maxWidth: '80px'
-            }}>Класс</th>
-            <th style={{
-              padding: '12px 16px',
-              textAlign: 'left',
-              color: '#ffffff',
-              fontWeight: '600',
-              fontSize: '14px',
-              borderBottom: '1px solid #243049',
-              maxWidth: '200px'
-            }}>Урок</th>
-            <th style={{
-              padding: '12px 16px',
-              textAlign: 'left',
-              color: '#ffffff',
-              fontWeight: '600',
-              fontSize: '14px',
-              borderBottom: '1px solid #243049',
-              maxWidth: '260px'
-            }}>Задание</th>
-            <th style={{
-              padding: '12px 16px',
-              textAlign: 'left',
-              color: '#ffffff',
-              fontWeight: '600',
-              fontSize: '14px',
-              borderBottom: '1px solid #243049',
-              maxWidth: '160px'
-            }}>Статус</th>
-            <th style={{
-              padding: '12px 16px',
-              textAlign: 'right',
-              color: '#ffffff',
-              fontWeight: '600',
-              fontSize: '14px',
-              borderBottom: '1px solid #243049',
-              width: '125px',
-              maxWidth: '125px'
-            }}>Дата</th>
+            {([
+              ['Номер',        'left',  90,  90],
+              ['Пользователь', 'left',  null, 180],
+              ['Класс',        'left',  80,  80],
+              ['Урок',         'left',  null, 200],
+              ['Задание',      'left',  null, 260],
+              ['Статус',       'left',  null, 160],
+              ['Дата',         'right', 125, 125],
+            ] as [string, 'left' | 'right', number | null, number][]).map(
+              ([label, align, width, maxWidth]) => (
+                <th
+                  key={label}
+                  style={{
+                    padding: '12px 16px',
+                    textAlign: align,
+                    color: '#ffffff',
+                    fontWeight: '600',
+                    fontSize: '14px',
+                    borderBottom: '1px solid #243049',
+                    width: width ?? undefined,
+                    maxWidth: maxWidth,
+                  }}
+                >
+                  {label}
+                </th>
+              )
+            )}
           </tr>
         </thead>
         <tbody>
@@ -449,7 +445,7 @@ export default function SubmissionsTab() {
         </tbody>
       </table>
       <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button className="btn" style={{ backgroundColor: '#3dd179', color: '#092013' }} disabled={displayPage <= 1} onClick={() => { if (isFilteredMode) setFilteredPage(p => Math.max(1, p - 1)); else setPage(p => Math.max(1, p - 1)) }}>пред</button>
+        <button className="btn" style={{ backgroundColor: '#3dd179', color: '#092013' }} disabled={displayPage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>пред</button>
         {displayTotal > 0 && (() => {
           const totalPages = Math.ceil(displayTotal / displayPageSize)
           const pages = []
@@ -459,24 +455,24 @@ export default function SubmissionsTab() {
           start = Math.max(1, end - showPages + 1)
 
           if (start > 1) {
-            pages.push(<button key={1} className="btn" style={{ backgroundColor: '#3dd179', color: '#092013' }} onClick={() => { if (isFilteredMode) setFilteredPage(1); else setPage(1) }}>1</button>)
+            pages.push(<button key={1} className="btn" style={{ backgroundColor: '#3dd179', color: '#092013' }} onClick={() => setPage(1)}>1</button>)
             if (start > 2) pages.push(<span key="start-ellipsis">...</span>)
           }
 
           for (let p = start; p <= end; p++) {
             pages.push(
-              <button key={p} className="btn" style={{ backgroundColor: p === displayPage ? '#2eb85c' : '#3dd179', color: '#092013' }} onClick={() => { if (isFilteredMode) setFilteredPage(p); else setPage(p) }}>{p}</button>
+              <button key={p} className="btn" style={{ backgroundColor: p === displayPage ? '#2eb85c' : '#3dd179', color: '#092013' }} onClick={() => setPage(p)}>{p}</button>
             )
           }
 
           if (end < totalPages) {
             if (end < totalPages - 1) pages.push(<span key="end-ellipsis">...</span>)
-            pages.push(<button key={totalPages} className="btn" style={{ backgroundColor: '#3dd179', color: '#092013' }} onClick={() => { if (isFilteredMode) setFilteredPage(totalPages); else setPage(totalPages) }}>{totalPages}</button>)
+            pages.push(<button key={totalPages} className="btn" style={{ backgroundColor: '#3dd179', color: '#092013' }} onClick={() => setPage(totalPages)}>{totalPages}</button>)
           }
 
           return pages
         })()}
-        <button className="btn" style={{ backgroundColor: '#3dd179', color: '#092013' }} disabled={displayTotal > 0 ? displayPage >= Math.ceil(displayTotal / displayPageSize) : false} onClick={() => { if (isFilteredMode) setFilteredPage(p => p + 1); else setPage(p => p + 1) }}>след</button>
+        <button className="btn" style={{ backgroundColor: '#3dd179', color: '#092013' }} disabled={displayTotal > 0 ? displayPage >= Math.ceil(displayTotal / displayPageSize) : false} onClick={() => setPage(p => p + 1)}>след</button>
       </div>
 
       {/* Modal for viewing solution */}

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Table
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, Table
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from .db import Base
@@ -82,7 +82,7 @@ class Lesson(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     language: Mapped[str] = mapped_column(String(20), index=True)  # "python" | "csharp"
-    language_id: Mapped[str] = mapped_column(ForeignKey("languages.id", ondelete="CASCADE"))
+    language_id: Mapped[str] = mapped_column(ForeignKey("languages.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     order_index: Mapped[int] = mapped_column(Integer, index=True)
     additional_info: Mapped[str | None] = mapped_column(Text, nullable=True)  # Additional information for students
@@ -95,12 +95,12 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"))
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str] = mapped_column(Text)
-    kind: Mapped[str] = mapped_column(String(20))  # "quiz" | "code"
+    kind: Mapped[str] = mapped_column(String(20), index=True)  # "quiz" | "code"
     test_spec: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string or plain
-    order_index: Mapped[int] = mapped_column(Integer, default=0)  # For ordering tasks within a lesson
+    order_index: Mapped[int] = mapped_column(Integer, default=0, index=True)  # For ordering tasks within a lesson
     # Rating (1-5) awarded to a user when this task is solved correctly.
     rating: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
@@ -116,10 +116,20 @@ class Submission(Base):
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True, nullable=False)
     answer: Mapped[str | None] = mapped_column(Text, nullable=True)  # for quiz
     code: Mapped[str | None] = mapped_column(Text, nullable=True)  # for code tasks
-    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(20), default="completed")  # "pending", "completed"
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    status: Mapped[str] = mapped_column(String(20), default="completed", index=True)  # "pending", "completed"
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
     user: Mapped[User] = relationship("User", back_populates="submissions")
     task: Mapped[Task] = relationship("Task", back_populates="submissions")
+
+    __table_args__ = (
+        # Composite index for rating computation: ordered submissions per user
+        Index("ix_submissions_user_created", "user_id", "created_at", "id"),
+        # Composite index for lesson status queries: submissions per user+task
+        Index("ix_submissions_user_task_created", "user_id", "task_id", "created_at", "id"),
+        # Composite index for the admin "pending review" queue: lets SQLite/PG
+        # walk pending rows in created_at order instead of scanning the table.
+        Index("ix_submissions_status_created", "status", "created_at", "id"),
+    )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 import sys
@@ -30,11 +31,18 @@ def run_python_tests(user_code: str, spec_json: str, timeout_seconds: int = 3) -
 
         code_file.write_text(user_code, encoding="utf-8")
 
+        # Embed the code path as a *properly escaped* Python literal.
+        # On Windows the temp path looks like C:\Users\... ; interpolating it
+        # raw into the harness made "\U" parse as a truncated unicode escape,
+        # so every submission failed with "Runtime error".  Normalising the
+        # separators and using !r fixes it on both Windows and POSIX.
+        code_path_literal = str(code_file).replace("\\", "/")
+
         harness = f"""
 import importlib.util, json, sys
 
 spec_name = "user_code"
-spec = importlib.util.spec_from_file_location(spec_name, "{code_file}")
+spec = importlib.util.spec_from_file_location(spec_name, {code_path_literal!r})
 mod = importlib.util.module_from_spec(spec)
 try:
     spec.loader.exec_module(mod)  # type: ignore
@@ -64,8 +72,7 @@ for idx, t in enumerate(tests):
         all_ok = False
 
 print(json.dumps({{"ok": all_ok, "results": results}}))
-""".replace("{code_file}", str(code_file).replace("\\", "/"))
-
+"""
         harness_file.write_text(harness, encoding="utf-8")
 
         try:
@@ -93,3 +100,17 @@ print(json.dumps({{"ok": all_ok, "results": results}}))
             return ok, data
         except Exception:
             return False, {"ok": False, "msg": "Invalid runner output", "results": []}
+
+
+async def run_python_tests_async(
+    user_code: str, spec_json: str, timeout_seconds: int = 3
+) -> tuple[bool, str | dict]:
+    """Async wrapper for ``run_python_tests``.
+
+    Runs the blocking subprocess call in a thread pool so the FastAPI event
+    loop stays free to handle other concurrent requests.  This is critical
+    when many users submit code simultaneously.
+    """
+    return await asyncio.to_thread(
+        run_python_tests, user_code, spec_json, timeout_seconds
+    )

@@ -4,9 +4,9 @@ import json
 import os
 import shutil
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, delete, or_, asc, desc, insert
+from sqlalchemy import select, func, delete, or_, asc, desc, insert, case, and_, cast, String
 from sqlalchemy.orm import Session
 
 from pydantic import BaseModel, Field
@@ -189,33 +189,29 @@ def get_user_card(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    total_submissions = db.execute(
-        select(func.count()).select_from(Submission).where(Submission.user_id == user_id)
-    ).scalar() or 0
-    correct_submissions = db.execute(
-        select(func.count()).select_from(Submission).where(Submission.user_id == user_id, Submission.is_correct == True)
-    ).scalar() or 0
-    pending_submissions = db.execute(
-        select(func.count()).select_from(Submission).where(Submission.user_id == user_id, Submission.status == "pending")
-    ).scalar() or 0
-    solved_tasks = db.execute(
-        select(func.count(func.distinct(Submission.task_id))).select_from(Submission).where(Submission.user_id == user_id, Submission.is_correct == True)
-    ).scalar() or 0
-    solved_code_tasks = db.execute(
-        select(func.count(func.distinct(Submission.task_id)))
+    # --- Combined stats query: 7 separate count queries → 1 query ---
+    stats_row = db.execute(
+        select(
+            func.count().label("total_submissions"),
+            func.count(case((Submission.is_correct == True, 1), else_=None)).label("correct_submissions"),
+            func.count(case((Submission.status == "pending", 1), else_=None)).label("pending_submissions"),
+            func.count(func.distinct(case((Submission.is_correct == True, Submission.task_id), else_=None))).label("solved_tasks"),
+            func.count(func.distinct(case((and_(Submission.is_correct == True, Task.kind == "code"), Submission.task_id), else_=None))).label("solved_code_tasks"),
+            func.count(func.distinct(case((and_(Submission.is_correct == True, Task.kind == "quiz"), Submission.task_id), else_=None))).label("solved_quiz_tasks"),
+            func.count(func.distinct(Submission.task_id)).label("attempted_tasks"),
+        )
         .select_from(Submission)
         .join(Task, Task.id == Submission.task_id)
-        .where(Submission.user_id == user_id, Submission.is_correct == True, Task.kind == "code")
-    ).scalar() or 0
-    solved_quiz_tasks = db.execute(
-        select(func.count(func.distinct(Submission.task_id)))
-        .select_from(Submission)
-        .join(Task, Task.id == Submission.task_id)
-        .where(Submission.user_id == user_id, Submission.is_correct == True, Task.kind == "quiz")
-    ).scalar() or 0
-    attempted_tasks = db.execute(
-        select(func.count(func.distinct(Submission.task_id))).select_from(Submission).where(Submission.user_id == user_id)
-    ).scalar() or 0
+        .where(Submission.user_id == user_id)
+    ).first()
+
+    total_submissions = stats_row.total_submissions or 0
+    correct_submissions = stats_row.correct_submissions or 0
+    pending_submissions = stats_row.pending_submissions or 0
+    solved_tasks = stats_row.solved_tasks or 0
+    solved_code_tasks = stats_row.solved_code_tasks or 0
+    solved_quiz_tasks = stats_row.solved_quiz_tasks or 0
+    attempted_tasks = stats_row.attempted_tasks or 0
 
     success_rate = round((correct_submissions / total_submissions * 100), 1) if total_submissions else 0.0
 
@@ -277,36 +273,33 @@ def get_user_card(
     # Lesson progress: for each lesson the user has submissions in, show the
     # total number of tasks and how many the user has solved. This powers the
     # "task completion in lessons" block in the personal card.
-    lesson_ids = db.execute(
-        select(func.distinct(Task.lesson_id))
+    # --- Combined lesson progress query: N+1 (2 queries per lesson) → 1 query ---
+    lesson_progress_stmt = (
+        select(
+            Lesson.id,
+            Lesson.title,
+            Language.name,
+            func.count(Task.id).label("total_tasks"),
+            func.count(func.distinct(case((Submission.is_correct == True, Submission.task_id), else_=None))).label("solved_tasks"),
+        )
+        .select_from(Lesson)
+        .join(Language, Language.id == Lesson.language_id)
+        .join(Task, Task.lesson_id == Lesson.id)
         .join(Submission, Submission.task_id == Task.id)
         .where(Submission.user_id == user_id)
-    ).scalars().all()
-
+        .group_by(Lesson.id, Lesson.title, Language.name)
+    )
+    lesson_rows = db.execute(lesson_progress_stmt).all()
     lesson_progress = []
-    if lesson_ids:
-        lesson_rows = db.execute(
-            select(Lesson.id, Lesson.title, Language.name)
-            .join(Language, Language.id == Lesson.language_id)
-            .where(Lesson.id.in_(lesson_ids))
-        ).all()
-        for lid, ltitle, lname in lesson_rows:
-            total_tasks = db.execute(
-                select(func.count(Task.id)).where(Task.lesson_id == lid)
-            ).scalar() or 0
-            solved_tasks_lp = db.execute(
-                select(func.count(func.distinct(Submission.task_id)))
-                .join(Task, Task.id == Submission.task_id)
-                .where(Submission.user_id == user_id, Submission.is_correct == True, Task.lesson_id == lid)
-            ).scalar() or 0
-            lesson_progress.append({
-                "lesson_id": int(lid),
-                "lesson_title": ltitle,
-                "language": lname,
-                "total_tasks": total_tasks,
-                "solved_tasks": solved_tasks_lp,
-            })
-        lesson_progress.sort(key=lambda x: (x["language"], x["lesson_title"]))
+    for lid, ltitle, lname, total_tasks, solved_tasks_lp in lesson_rows:
+        lesson_progress.append({
+            "lesson_id": int(lid),
+            "lesson_title": ltitle,
+            "language": lname,
+            "total_tasks": total_tasks or 0,
+            "solved_tasks": solved_tasks_lp or 0,
+        })
+    lesson_progress.sort(key=lambda x: (x["language"], x["lesson_title"]))
 
     user_rank = db.execute(
         select(func.count(User.id)).where(
@@ -540,59 +533,220 @@ def get_task(task_id: int, current_user: User = Depends(get_current_admin), db: 
 
 # --- Submissions ---
 
+@router.get("/submissions/filter-options")
+def submissions_filter_options(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Filter dropdown options for the submissions table.
+
+    Only values that actually have at least one submission are returned.  The
+    previous implementation derived these lists from the loaded rows; the
+    server-side rewrite initially pulled them from every user/lesson, which made
+    the dropdowns offer values that always produced an empty table (e.g. a class
+    with no submissions) and looked like the filters were broken.
+    """
+    is_admin = current_user.role == "admin"
+
+    classes_stmt = (
+        select(User.user_class)
+        .select_from(Submission)
+        .join(User, User.id == Submission.user_id)
+        .where(User.user_class.isnot(None), User.user_class != "")
+        .group_by(User.user_class)
+        .order_by(User.user_class)
+    )
+    lessons_stmt = (
+        select(Lesson.id, Lesson.title, Language.name)
+        .select_from(Submission)
+        .join(Task, Task.id == Submission.task_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+        .join(Language, Language.id == Lesson.language_id)
+        .group_by(Lesson.id, Lesson.title, Language.name)
+        .order_by(Language.name, Lesson.title)
+    )
+    if not is_admin:
+        classes_stmt = classes_stmt.where(Submission.user_id == current_user.id)
+        lessons_stmt = lessons_stmt.where(Submission.user_id == current_user.id)
+
+    classes = db.execute(classes_stmt).scalars().all()
+    lesson_rows = db.execute(lessons_stmt).all()
+
+    return {
+        "classes": [c for c in classes if c],
+        # Lesson titles repeat across languages, so include the language to keep
+        # the entries distinguishable.
+        "lessons": [
+            {"id": int(lid), "title": ltitle, "language": lname}
+            for lid, ltitle, lname in lesson_rows
+        ],
+    }
+
+
 @router.get("/submissions")
-def list_submissions(user_name: str = "", page: int = 1, page_size: int = 50, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_submissions(
+    user_name: str = "",
+    status: str = "",
+    user_class: str = "",
+    lesson_id: str = "",
+    search: str = "",
+    sort_by: str = "created_at",
+    order: str = "desc",
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List submissions with server-side filtering, sorting and pagination.
+
+    Previously the UI requested ``page_size=100000`` and filtered/sorted in the
+    browser.  That forced SQLite to read and join every submission row (with
+    their code/result blobs) on each keystroke, which spiked disk IOPS into the
+    tens of thousands.  Filtering is now pushed into SQL and the page size is
+    hard-capped, so a filter click costs a single indexed page read.
+    """
     # Non-admin users may only view their own submissions.
     if current_user.role != "admin":
         user_name = current_user.username
+        user_class = ""
+        search = ""
+
+    # Clamp instead of rejecting.  An older cached frontend build asks for
+    # page_size=100000 as soon as any filter is touched; returning 422 there
+    # made the whole filter row look dead (the client swallows the error).
+    # Capping the page keeps the IOPS win while staying backward compatible.
+    MAX_PAGE_SIZE = 200
+    requested_page_size = page_size
+    page_size = max(1, min(page_size, MAX_PAGE_SIZE))
+
     visible_lesson = visible_lessons_condition(current_user, get_user_language_ids(db, current_user))
-    base_stmt = (
-        select(Submission, User.username, User.user_class, Task.lesson_id, Task.title.label('task_title'), Lesson.title.label('lesson_title'), Language.name.label('language'))
+
+    def _apply_filters(stmt):
+        if visible_lesson is not None:
+            stmt = stmt.where(visible_lesson)
+        if current_user.role != "admin":
+            stmt = stmt.where(Submission.user_id == current_user.id)
+        if user_name:
+            stmt = stmt.where(User.username == user_name)
+        if status:
+            stmt = stmt.where(Submission.status == status)
+        if user_class:
+            stmt = stmt.where(User.user_class == user_class)
+        if lesson_id:
+            try:
+                stmt = stmt.where(Task.lesson_id == int(lesson_id))
+            except ValueError:
+                # Allow matching by lesson title as a fallback.
+                stmt = stmt.where(Lesson.title == lesson_id)
+        if search.strip():
+            like = f"%{search.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    User.username.ilike(like),
+                    User.full_name.ilike(like),
+                    cast(Submission.id, String).ilike(like),
+                )
+            )
+        return stmt
+
+    # --- Total count ---------------------------------------------------
+    # Count only the ids of the *filtered* set instead of wrapping the full
+    # 4-table select (with code/result blobs) in a subquery.  This keeps the
+    # count cheap and lets the engine use covering indexes.
+    count_stmt = _apply_filters(
+        select(func.count(func.distinct(Submission.id)))
+        .select_from(Submission)
+        .join(User, User.id == Submission.user_id)
+        .join(Task, Task.id == Submission.task_id)
+        .join(Lesson, Lesson.id == Task.lesson_id)
+    )
+    total = db.execute(count_stmt).scalar() or 0
+
+    # --- Page of rows --------------------------------------------------
+    sort_columns = {
+        "id": Submission.id,
+        "created_at": Submission.created_at,
+        "status": Submission.status,
+        "is_correct": Submission.is_correct,
+        "user_name": User.username,
+        "user_class": User.user_class,
+        "lesson_title": Lesson.title,
+        "task_title": Task.title,
+    }
+    sort_col = sort_columns.get(sort_by, Submission.created_at)
+    # Always build a list: unpacking a bare expression with *order_by raises
+    # "Operator 'getitem' is not supported" and returned HTTP 500.
+    order_by = [asc(sort_col) if order == "asc" else desc(sort_col)]
+    # Stable tie-breaker so pagination never skips/duplicates rows.
+    if sort_col is not Submission.id:
+        order_by.append(desc(Submission.id))
+
+    data_stmt = _apply_filters(
+        select(
+            Submission.id.label("id"),
+            User.username.label("user_name"),
+            User.user_class.label("user_class"),
+            Task.lesson_id.label("lesson_id"),
+            Task.title.label("task_title"),
+            Lesson.title.label("lesson_title"),
+            Language.name.label("language"),
+            Submission.task_id.label("task_id"),
+            Submission.is_correct.label("is_correct"),
+            Submission.result.label("result"),
+            Submission.status.label("status"),
+            Submission.code.label("code"),
+            Submission.created_at.label("created_at"),
+        )
+        .select_from(Submission)
         .join(User, User.id == Submission.user_id)
         .join(Task, Task.id == Submission.task_id)
         .join(Lesson, Lesson.id == Task.lesson_id)
         .join(Language, Language.id == Lesson.language_id)
-        .where(visible_lesson)
-        .order_by(Submission.created_at.desc())
     )
-    if current_user.role != "admin":
-        base_stmt = base_stmt.where(Submission.user_id == current_user.id)
-    if user_name:
-        base_stmt = base_stmt.where(User.username == user_name)
-    count_stmt = select(func.count()).select_from(base_stmt.subquery())
-    total = db.execute(count_stmt).scalar()
-    stmt = base_stmt.offset((page - 1) * page_size).limit(page_size)
-    rows = db.execute(stmt).all()
+    data_stmt = data_stmt.order_by(*order_by).offset((page - 1) * page_size).limit(page_size)
+
+    rows = db.execute(data_stmt).all()
     out = []
-    for s, user_name_val, user_class_val, lesson_id, task_title, lesson_title, language in rows:
-        status = getattr(s, 'status', 'completed')
+    for row in rows:
+        r = row._mapping
         out.append({
-            "id": s.id,
-            "user_name": user_name_val,
-            "user_class": user_class_val,
-            "lesson_id": int(lesson_id),
-            "lesson_title": lesson_title,
-            "language": language,
-            "task_id": s.task_id,
-            "task_title": task_title,
-            "is_correct": s.is_correct,
-            "result": s.result,
-            "status": status,
-            "code": s.code,
-            "created_at": s.created_at,
+            "id": r["id"],
+            "user_name": r["user_name"],
+            "user_class": r["user_class"],
+            "lesson_id": int(r["lesson_id"]),
+            "lesson_title": r["lesson_title"],
+            "language": r["language"],
+            "task_id": r["task_id"],
+            "task_title": r["task_title"],
+            "is_correct": r["is_correct"],
+            "result": r["result"],
+            "status": r["status"] or "completed",
+            "code": r["code"],
+            "created_at": r["created_at"],
         })
-    return {"data": out, "total": total, "page_size": page_size}
+    return {"data": out, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/submissions/pending")
-def list_pending_submissions(page: int = 1, page_size: int = 50, current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+def list_pending_submissions(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1),
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """List submissions awaiting review, oldest first.
+
+    Served by the ``(status, created_at)`` composite index so the engine walks
+    the pending rows directly instead of scanning the whole submissions table.
+    """
+    page_size = max(1, min(page_size, 200))
     stmt = (
         select(Submission, User.username, Task.title.label('task_title'), Task.description.label('task_description'), Lesson.title.label('lesson_title'))
         .join(User, User.id == Submission.user_id)
         .join(Task, Task.id == Submission.task_id)
         .join(Lesson, Lesson.id == Task.lesson_id)
         .where(Submission.status == "pending")
-        .order_by(Submission.created_at.asc())
+        .order_by(Submission.created_at.asc(), Submission.id.asc())
     )
     rows = db.execute(stmt.offset((page - 1) * page_size).limit(page_size)).all()
     out = []

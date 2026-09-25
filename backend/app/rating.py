@@ -32,7 +32,8 @@ of the milestones, the corresponding bonus is added:
 milestone value, so reaching a 20-streak gives +20 points.)
 """
 
-from sqlalchemy import select, func
+from sqlalchemy import select
+from sqlalchemy import func
 
 from .models import Submission, Task, User
 
@@ -58,9 +59,17 @@ def compute_rating_base(db, user_id: int) -> int:
       * award the task's rating the first time that task is solved, and
       * award a streak bonus whenever the running streak hits a milestone.
     An incorrect/pending submission resets the streak.
+
+    Optimization: selects only the columns needed for computation instead of
+    loading full ORM objects, reducing memory and query time.
     """
     rows = db.execute(
-        select(Submission, Task.rating)
+        select(
+            Submission.task_id,
+            Submission.is_correct,
+            Submission.status,
+            Task.rating,
+        )
         .join(Task, Task.id == Submission.task_id)
         .where(Submission.user_id == user_id)
         .order_by(Submission.created_at.asc(), Submission.id.asc())
@@ -70,12 +79,12 @@ def compute_rating_base(db, user_id: int) -> int:
     streak = 0
     solved_tasks: set[int] = set()
 
-    for submission, task_rating in rows:
-        if submission.is_correct:
+    for task_id, is_correct, status, task_rating in rows:
+        if is_correct:
             streak += 1
             # Award the task's rating only the first time it is solved correctly.
-            if submission.task_id not in solved_tasks:
-                solved_tasks.add(submission.task_id)
+            if task_id not in solved_tasks:
+                solved_tasks.add(task_id)
                 rating += int(task_rating or 1)
             # Award a streak bonus when a milestone is reached.
             rating += streak_bonus(streak)

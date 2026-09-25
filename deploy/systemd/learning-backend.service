@@ -7,7 +7,20 @@ Type=simple
 User=__APP_USER__
 WorkingDirectory=__APP_DIR__
 EnvironmentFile=__APP_DIR__/backend/.env
-ExecStart=/usr/bin/env uvicorn backend.app.main:app --host 127.0.0.1 --port __BACKEND_PORT__
+# Use Gunicorn with multiple Uvicorn workers for production concurrency.
+# Each worker is a separate process with its own connection pool, allowing
+# the server to handle many simultaneous users.
+# --workers: number of worker processes (2 * CPU cores + 1 is a common formula)
+# --worker-class: uvicorn worker for async support
+# --timeout: worker timeout in seconds (must be >= REQUEST_TIMEOUT_SECONDS)
+# --bind: listen on localhost only (nginx handles TLS termination)
+ExecStart=/usr/bin/env gunicorn backend.app.main:app \
+    --workers __WORKERS__ \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --timeout 120 \
+    --bind 127.0.0.1:__BACKEND_PORT__ \
+    --access-logfile - \
+    --error-logfile -
 Restart=always
 RestartSec=5
 
