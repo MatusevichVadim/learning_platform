@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { authHeaders } from '../../api'
 import ReactMarkdown from 'react-markdown'
@@ -43,6 +43,11 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
   }, [initialSelectedLessonId])
 
   async function refresh() {
+    // Persist any pending in-memory reordering before pulling server truth,
+    // otherwise the new order would be immediately overwritten and lost.
+    if (pendingOrderRef.current) {
+      await flushReorder()
+    }
     const res = await axios.get('/api/admin/tasks', { headers: authHeaders() })
     setTasks(res.data)
     const ls = await axios.get('/api/admin/lessons', { headers: authHeaders() })
@@ -50,6 +55,26 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
     const langs = await axios.get('/api/admin/languages', { headers: authHeaders() })
     setLanguages(langs.data)
   }
+
+  // Flush any pending reorder when the component unmounts so the final order
+  // is never lost (e.g. navigating away or switching languages mid-drag).
+  useEffect(() => {
+    return () => {
+      if (reorderTimerRef.current) {
+        clearTimeout(reorderTimerRef.current)
+        reorderTimerRef.current = null
+      }
+      if (pendingOrderRef.current) {
+        const pending = pendingOrderRef.current
+        pendingOrderRef.current = null
+        axios.post(
+          '/api/admin/tasks/reorder',
+          pending.map(t => ({ id: t.id, order_index: t.order_index })),
+          { headers: authHeaders() }
+        ).catch(() => {})
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (view === 'add') {
@@ -194,17 +219,203 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
     }
   }
 
-  async function moveTask(id: number, direction: 'left' | 'right') {
+  // --- Optimistic, single-request reordering (drag-and-drop + arrows) ---
+  // We never issue one request per swap. Instead we keep an in-memory
+  // "desired order" and flush it as a single /tasks/reorder request,
+  // debounced so rapid successive moves collapse into one request.
+  const reorderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingOrderRef = useRef<Task[] | null>(null)
+
+  function scheduleFlush() {
+    if (reorderTimerRef.current) clearTimeout(reorderTimerRef.current)
+    reorderTimerRef.current = setTimeout(flushReorder, 400)
+  }
+
+  async function flushReorder() {
+    const pending = pendingOrderRef.current
+    reorderTimerRef.current = null
+    if (!pending) return
+    pendingOrderRef.current = null
     try {
-      // Map left/right to up/down for the API
-      const apiDirection = direction === 'left' ? 'up' : 'down'
-      await axios.post(`/api/admin/tasks/${id}/move`, { direction: apiDirection }, { headers: authHeaders() })
+      await axios.post(
+        '/api/admin/tasks/reorder',
+        pending.map(t => ({ id: t.id, order_index: t.order_index })),
+        { headers: authHeaders() }
+      )
+    } catch (error) {
+      console.error('Failed to persist task order:', error)
+      // Roll back to server truth on failure.
+      pendingOrderRef.current = null
       await refresh()
       if (selectedId) onSelect(selectedId)
-    } catch (error) {
-      console.error('Failed to move task:', error)
-      alert('Ошибка при перемещении задания')
+      alert('Ошибка при сохранении порядка заданий')
     }
+  }
+
+  // Apply a new ordering to the visible task list optimistically and
+  // remember it for the next flush. `order` is the full ordered list of
+  // tasks that belong to the currently selected lesson.
+  function applyReorder(order: Task[]) {
+    setTasks(order)
+    pendingOrderRef.current = order
+    scheduleFlush()
+  }
+
+  // Move a single task one step left/right within its lesson, optimistically.
+  function moveTask(id: number, direction: 'left' | 'right') {
+    const lessonId = selectedLessonForFilter
+    if (!lessonId) return
+    const list = tasks
+      .filter(t => t.lesson_id === lessonId)
+      .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+    const idx = list.findIndex(t => t.id === id)
+    if (idx < 0) return
+    const newIdx = direction === 'left' ? idx - 1 : idx + 1
+    if (newIdx < 0 || newIdx >= list.length) return
+    const next = list.slice()
+    ;[next[idx], next[newIdx]] = [next[newIdx], next[idx]]
+    // Reassign contiguous order_index values so the DB stays gap-free.
+    next.forEach((t, i) => (t.order_index = i + 1))
+    applyReorder(next)
+  }
+
+  // --- Native HTML5 drag-and-drop state ---
+  const [dragId, setDragId] = useState<number | null>(null)
+  // Which card the pointer is currently over, and whether the drop would place
+  // the dragged card *above* or *below* it. Together they render a green
+  // "insertion stick" that shows exactly where the task will land.
+  const [dragOverId, setDragOverId] = useState<number | null>(null)
+  const [dropSide, setDropSide] = useState<'before' | 'after' | null>(null)
+
+  // Find the task card nearest to a given (clientX, clientY) coordinate. This
+  // lets the user drop the dragged card anywhere inside the list — including
+  // the gaps between cards — not only exactly on top of another card.
+  //
+  // The match is computed in 2D so cards on different rows are not confused:
+  // a card that fully contains the cursor (both X and Y) always wins; only
+  // among cards that do not contain the cursor do we fall back to the
+  // closest 2D distance to the card's bounding box.
+  function findCardAt(clientX: number, clientY: number): number | null {
+    let bestId: number | null = null
+    let bestDist = Infinity
+    let bestContains = false
+    document.querySelectorAll('[data-task-id]').forEach(el => {
+      const id = Number((el as HTMLElement).dataset.taskId)
+      const r = el.getBoundingClientRect()
+      const insideX = clientX >= r.left && clientX <= r.right
+      const insideY = clientY >= r.top && clientY <= r.bottom
+      const contains = insideX && insideY
+      // 2D distance from the cursor to the card's bounding box (0 if inside).
+      const dx = insideX ? 0 : (clientX < r.left ? r.left - clientX : clientX - r.right)
+      const dy = insideY ? 0 : (clientY < r.top ? r.top - clientY : clientY - r.bottom)
+      const dist = Math.hypot(dx, dy)
+      if (contains && !bestContains) {
+        bestContains = true
+        bestDist = dist
+        bestId = id
+      } else if (contains && bestContains && dist < bestDist) {
+        bestDist = dist
+        bestId = id
+      } else if (!contains && !bestContains && dist < bestDist) {
+        bestDist = dist
+        bestId = id
+      }
+    })
+    return bestId
+  }
+
+  function onContainerDragOver(e: React.DragEvent) {
+    e.preventDefault() // allow drop
+    e.dataTransfer.dropEffect = 'move'
+    if (dragId == null) return
+    const id = findCardAt(e.clientX, e.clientY)
+    if (id == null) {
+      if (dragOverId !== null) setDragOverId(null)
+      if (dropSide !== null) setDropSide(null)
+      return
+    }
+    // Decide above/below based on whether the cursor is in the top or bottom
+    // half of the target card — this is where the green stick will be drawn.
+    const el = document.querySelector(`[data-task-id="${id}"]`) as HTMLElement | null
+    let side: 'before' | 'after' = 'before'
+    if (el) {
+      const r = el.getBoundingClientRect()
+      side = e.clientY < (r.top + r.bottom) / 2 ? 'before' : 'after'
+    }
+    if (dragOverId !== id || dropSide !== side) {
+      setDragOverId(id)
+      setDropSide(side)
+    }
+  }
+
+  // Compute the horizontal gap (right margin) for a card so that, when the
+  // green insertion stick appears on its edge, the neighbouring card is pulled
+  // in by exactly the stick's width — no leftover gap is left behind.
+  function stickMargin(idx: number, total: number): number {
+    if (dragOverId == null || dropSide == null) return 4
+    const list = tasks
+      .filter(t => t.lesson_id === selectedLessonForFilter)
+      .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+    const overIdx = list.findIndex(t => t.id === dragOverId)
+    if (overIdx < 0) return 4
+    const stick = 3 // width of the green border stick
+    // Stick on the right edge of the target card: pull the next card left.
+    if (idx === overIdx && dropSide === 'after') return 4 - stick
+    // Stick on the left edge of the target card: pull this (next) card left.
+    if (idx === overIdx + 1 && dropSide === 'before') return 4 - stick
+    return 4
+  }
+
+  function onContainerDragLeave(e: React.DragEvent) {
+    // Only clear the highlight when leaving the container entirely.
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setDragOverId(null)
+    setDropSide(null)
+  }
+
+  function onContainerDrop(e: React.DragEvent) {
+    e.preventDefault()
+    const sourceId = dragId
+    setDragId(null)
+    setDragOverId(null)
+    setDropSide(null)
+    if (sourceId == null) return
+    const targetId = findCardAt(e.clientX, e.clientY)
+    if (targetId == null) return
+
+    const lessonId = selectedLessonForFilter
+    if (!lessonId) return
+    const list = tasks
+      .filter(t => t.lesson_id === lessonId)
+      .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+    const fromIdx = list.findIndex(t => t.id === sourceId)
+    const toIdx = list.findIndex(t => t.id === targetId)
+    if (fromIdx < 0 || toIdx < 0) return
+    if (fromIdx === toIdx) return
+
+    // dropSide tells us whether the dragged card goes before or after the
+    // target card. If the cursor is in the top half, insert before; otherwise
+    // after. This keeps the green stick and the actual placement in sync.
+    const el = document.querySelector(`[data-task-id="${targetId}"]`) as HTMLElement | null
+    let side = dropSide
+    if (!side && el) {
+      const r = el.getBoundingClientRect()
+      side = e.clientY < (r.top + r.bottom) / 2 ? 'before' : 'after'
+    }
+    const insertAt = side === 'before' ? toIdx : toIdx + 1
+    if (insertAt === fromIdx || insertAt === fromIdx + 1) return
+
+    const next = list.slice()
+    const [moved] = next.splice(fromIdx, 1)
+    next.splice(insertAt, 0, moved)
+    next.forEach((t, i) => (t.order_index = i + 1))
+    applyReorder(next)
+  }
+
+  function onContainerDragEnd() {
+    setDragId(null)
+    setDragOverId(null)
+    setDropSide(null)
   }
 
   return (
@@ -413,12 +624,34 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
           {selectedLessonForFilter && (
             <>
               <label style={{ display: 'block', marginBottom: 8 }}>Выбрать задание</label>
-              <div className="tabs" style={{ justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+              <div className="tabs" onDragOver={onContainerDragOver} onDragLeave={onContainerDragLeave} onDrop={onContainerDrop} onDragEnd={onContainerDragEnd} style={{ justifyContent: 'flex-start', flexWrap: 'wrap' }}>
                 {tasks
-                  .filter(t => !selectedLessonForFilter || t.lesson_id === selectedLessonForFilter)
+                  .filter(t => !selectedLessonForFilter || t .lesson_id === selectedLessonForFilter)
                   .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
                   .map((t, idx, arr) => (
-                    <div key={t.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: 4, marginBottom: 4 }}>
+                    <div
+                      key={t.id}
+                      data-task-id={t.id}
+                      draggable
+                      onDragStart={e => {
+                        setDragId(t.id)
+                        e.dataTransfer.effectAllowed = 'move'
+                        try { e.dataTransfer.setData('text/plain', String(t.id)) } catch {}
+                      }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        marginRight: stickMargin(idx, arr.length),
+                        marginBottom: 4,
+                        opacity: dragId === t.id ? 0.4 : 1,
+                        // Green "insertion stick" — a vertical line on the edge where
+                        // the dragged card would land (above or below this card).
+                        borderLeft: dragOverId === t.id && dropSide === 'before' ? '3px solid #3dd179' : 'none',
+                        borderRight: dragOverId === t.id && dropSide === 'after' ? '3px solid #3dd179' : 'none',
+                        cursor: dragId ? 'grabbing' : 'grab'
+                      }}
+                    >
                       <button
                         className="tab"
                         onClick={() => onSelect(t.id)}
@@ -430,42 +663,6 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
                       >
                         {t.title}
                       </button>
-                      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                        <button
-                          type="button"
-                          onClick={() => moveTask(t.id, 'left')}
-                          disabled={idx === 0}
-                          style={{
-                            background: '#1e2533',
-                            border: '1px solid #2d3748',
-                            borderRadius: '4px',
-                            color: idx === 0 ? '#444' : '#a9b1bb',
-                            cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                            fontSize: '12px',
-                            padding: '4px 8px'
-                          }}
-                          title="Переместить влево"
-                        >
-                          ◄
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveTask(t.id, 'right')}
-                          disabled={idx === arr.length - 1}
-                          style={{
-                            background: '#1e2533',
-                            border: '1px solid #2d3748',
-                            borderRadius: '4px',
-                            color: idx === arr.length - 1 ? '#444' : '#a9b1bb',
-                            cursor: idx === arr.length - 1 ? 'not-allowed' : 'pointer',
-                            fontSize: '12px',
-                            padding: '4px 8px'
-                          }}
-                          title="Переместить вправо"
-                        >
-                          ►
-                        </button>
-                      </div>
                     </div>
                   ))}
               </div>

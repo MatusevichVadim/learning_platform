@@ -1149,6 +1149,47 @@ def move_task(task_id: int, data: dict, current_user: User = Depends(get_current
     return {"status": "moved", "direction": direction}
 
 
+class TaskOrderItem(BaseModel):
+    id: int
+    order_index: int
+
+
+@router.post("/tasks/reorder")
+def reorder_tasks(
+    data: list[TaskOrderItem],
+    current_user: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Persist a full reordering of tasks in a single transaction.
+
+    Accepts a list of {id, order_index} and reassigns each task's order_index.
+    This is the single source of truth for drag-and-drop reordering, so the
+    frontend only needs to fire ONE request per drop instead of one per swap.
+    """
+    if not data:
+        return {"status": "ok", "updated": 0}
+
+    # Validate that every task exists and belongs to a single lesson.
+    ids = [item.id for item in data]
+    tasks = db.execute(
+        select(Task).where(Task.id.in_(ids))
+    ).scalars().all()
+    found = {t.id: t for t in tasks}
+    missing = [i for i in ids if i not in found]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Tasks not found: {missing}")
+
+    lesson_ids = {t.lesson_id for t in tasks}
+    if len(lesson_ids) > 1:
+        raise HTTPException(status_code=400, detail="All reordered tasks must belong to the same lesson")
+
+    for item in data:
+        found[item.id].order_index = item.order_index
+
+    db.commit()
+    return {"status": "ok", "updated": len(data)}
+
+
 @router.get("/export/submissions.csv")
 def export_submissions_csv(current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     import io, csv
