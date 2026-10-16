@@ -39,11 +39,13 @@ export default function SubmissionsTab() {
   // change, which made SQLite read and join the whole submissions table
   // (code/result blobs included) and spiked disk IOPS into the tens of
   // thousands.  A single indexed page read is all we need now.
-  const [statusFilter, setStatusFilter] = useState('')
-  const [classFilter, setClassFilter] = useState('')
-  const [lessonFilter, setLessonFilter] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  // Filter values are persisted in localStorage so they survive page reloads
+  // until the user clicks "Сбросить".
+  const [statusFilter, setStatusFilter] = useState<string>(() => localStorage.getItem('admin_sub_status') || '')
+  const [classFilter, setClassFilter] = useState<string>(() => localStorage.getItem('admin_sub_class') || '')
+  const [lessonFilter, setLessonFilter] = useState<string>(() => localStorage.getItem('admin_sub_lesson') || '')
+  const [searchQuery, setSearchQuery] = useState<string>(() => localStorage.getItem('admin_sub_search') || '')
+  const [debouncedSearch, setDebouncedSearch] = useState<string>(() => localStorage.getItem('admin_sub_search') || '')
 
   // The table is always ordered by date, newest first (the server default).
   const [loadError, setLoadError] = useState('')
@@ -61,6 +63,20 @@ export default function SubmissionsTab() {
 
   // Any filter change must return to the first page.
   useEffect(() => { setPage(1) }, [statusFilter, classFilter, lessonFilter, debouncedSearch])
+
+  // Persist filter values to localStorage so they survive page reloads.
+  useEffect(() => {
+    localStorage.setItem('admin_sub_status', statusFilter)
+  }, [statusFilter])
+  useEffect(() => {
+    localStorage.setItem('admin_sub_class', classFilter)
+  }, [classFilter])
+  useEffect(() => {
+    localStorage.setItem('admin_sub_lesson', lessonFilter)
+  }, [lessonFilter])
+  useEffect(() => {
+    localStorage.setItem('admin_sub_search', searchQuery)
+  }, [searchQuery])
 
   useEffect(() => {
     refresh()
@@ -256,7 +272,17 @@ export default function SubmissionsTab() {
         {(statusFilter || classFilter || lessonFilter || searchQuery) && (
           <button
             className="btn"
-            onClick={() => { setStatusFilter(''); setClassFilter(''); setLessonFilter(''); setSearchQuery(''); setPage(1) }}
+            onClick={() => {
+              localStorage.removeItem('admin_sub_status')
+              localStorage.removeItem('admin_sub_class')
+              localStorage.removeItem('admin_sub_lesson')
+              localStorage.removeItem('admin_sub_search')
+              setStatusFilter('')
+              setClassFilter('')
+              setLessonFilter('')
+              setSearchQuery('')
+              setPage(1)
+            }}
             style={{ fontSize: '12px', padding: '6px 12px', backgroundColor: '#3dd179', color: '#092013' }}
           >
             Сбросить

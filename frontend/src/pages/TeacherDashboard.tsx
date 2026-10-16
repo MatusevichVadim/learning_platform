@@ -102,6 +102,12 @@ export default function TeacherDashboard() {
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const [selectedStudentLanguageIds, setSelectedStudentLanguageIds] = useState<string[]>([])
   const [languageSaveLoading, setLanguageSaveLoading] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  useEffect(() => {
+    if (!successMessage) return
+    const t = setTimeout(() => setSuccessMessage(''), 2000)
+    return () => clearTimeout(t)
+  }, [successMessage])
 
   useEffect(() => {
     loadClasses()
@@ -476,7 +482,7 @@ export default function TeacherDashboard() {
     setMessage('')
     try {
       await teacherSetStudentLanguages(languageModalStudent.id, selectedStudentLanguageIds)
-      setMessage('Языки ученика обновлены')
+      setSuccessMessage('Языки ученика обновлены')
       setLanguageModalStudent(null)
       setSelectedStudentLanguageIds([])
       loadStudents()
@@ -1112,7 +1118,8 @@ export default function TeacherDashboard() {
           </div>
         )}
 
-        {message && <div style={{ marginBottom: 12, color: message === 'Ученик создан' || message === 'Ученик обновлен' || message === 'Пароль сброшен' || message === 'Языки ученика обновлены' ? '#3dd179' : '#dc3545' }}>{message}</div>}
+        {successMessage && <div style={{ marginBottom: 12, color: '#3dd179' }}>{successMessage}</div>}
+        {message && <div style={{ marginBottom: 12, color: message.includes('Ошибка') || message.includes('должен') ? '#dc3545' : '#3dd179' }}>{message}</div>}
 
         <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <input
