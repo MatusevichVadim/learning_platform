@@ -5,7 +5,7 @@ import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Header
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from ..access import ensure_language_access, ensure_lesson_access, get_user_language_ids, visible_lessons_condition
@@ -140,6 +140,18 @@ def get_task_submission(task_id: int, user: User = Depends(get_current_user), db
         "code": submission.code,
         "status": getattr(submission, 'status', 'completed'),
         "created_at": submission.created_at,
+        # Number of incorrect quiz/code submissions for this task. Used by the
+        # client to restore the attempt counter across page reloads, so a task
+        # that has already exhausted its 3 attempts cannot be resubmitted.
+        "incorrect_attempts": db.execute(
+            select(func.count())
+            .select_from(Submission)
+            .where(
+                Submission.user_id == user.id,
+                Submission.task_id == task_id,
+                Submission.is_correct == False,
+            )
+        ).scalar() or 0,
     }
 
 
@@ -174,6 +186,32 @@ def submit_quiz(task_id: int, payload: SubmitQuiz, user: User = Depends(get_curr
     user_answer = sorted(payload.answer.strip())
     correct_answer = sorted(correct_letters)
     is_correct = user_answer == correct_answer
+
+    # The client tracks the number of attempts in localStorage, but that state
+    # can be out of sync (e.g. right after a page refresh, before the persisted
+    # attempt counter is restored). The server is the source of truth: reject
+    # any further incorrect submission once 3 failed attempts have already been
+    # recorded for this task. Correct answers are always allowed (the task is
+    # then marked solved and the lock is irrelevant).
+    if not is_correct:
+        incorrect_count = (
+            db.execute(
+                select(func.count())
+                .select_from(Submission)
+                .where(
+                    Submission.user_id == user.id,
+                    Submission.task_id == task.id,
+                    Submission.is_correct == False,
+                )
+            ).scalar()
+            or 0
+        )
+        if incorrect_count >= 3:
+            raise HTTPException(
+                status_code=400,
+                detail="Для этого задания исчерпан лимит из 3 попыток. Обновите страницу, чтобы увидеть текущий статус.",
+            )
+
     submission = Submission(user_id=user.id, task_id=task.id, answer=payload.answer, is_correct=is_correct, result="correct" if is_correct else "incorrect")
     db.add(submission)
     db.flush()

@@ -18,6 +18,12 @@ type SubmissionDetails = {
   code: string | null
   status: string
   created_at: string
+  // Number of incorrect submissions for this task, returned by the server.
+  // The server is the source of truth for the 3-attempt limit, so the client
+  // restores this value across page reloads instead of relying on a local
+  // localStorage counter that could be out of sync (e.g. right after a
+  // refresh, before the persisted counter is restored).
+  incorrect_attempts?: number
 }
 
 export default function LessonDetail() {
@@ -106,7 +112,7 @@ export default function LessonDetail() {
   const fetchSubmissionDetails = async (taskList: Task[]) => {
     const details: Record<number, SubmissionDetails | null> = {}
     let hasPending = false
-    
+
     for (const task of taskList) {
       try {
         const submission = await getTaskSubmission(task.id)
@@ -114,11 +120,21 @@ export default function LessonDetail() {
         if (submission?.status === 'pending') {
           hasPending = true
         }
+        // Sync the attempt counter with the server so that a task that has
+        // already exhausted its 3 attempts cannot be resubmitted after a
+        // page refresh (the local localStorage counter can be out of sync).
+        if (submission && submission.incorrect_attempts !== undefined) {
+          const stored = localStorage.getItem(quizAttemptKey(task.id))
+          const localCount = stored ? Number(stored) : 0
+          if (submission.incorrect_attempts > localCount) {
+            localStorage.setItem(quizAttemptKey(task.id), String(submission.incorrect_attempts))
+          }
+        }
       } catch (error) {
         details[task.id] = null
       }
     }
-    
+
     setSubmissionDetails(details)
     setHasPendingSubmissions(hasPending)
     return details
@@ -314,8 +330,55 @@ export default function LessonDetail() {
     }
     const value = quizAnswer !== undefined ? quizAnswer : (answers[task.id] || '')
     if (task.kind === 'quiz') {
-      await submitQuiz(task.id, value)
-      setDetailedResults(prev => ({ ...prev, [task.id]: undefined })) // clear previous
+      // Guard against resubmitting a quiz that has already exhausted its 3
+      // attempts. The local counter can be out of sync right after a page
+      // refresh, so fall back to the server-tracked count.
+      const detail = submissionDetails[task.id]
+      const serverIncorrect = detail?.incorrect_attempts
+      const localIncorrect = quizAttempts[task.id] || 0
+      const effectiveIncorrect = serverIncorrect !== undefined ? Math.max(serverIncorrect, localIncorrect) : localIncorrect
+      if (effectiveIncorrect >= 3 && status[task.id] !== true) {
+        alert('Для этого задания исчерпан лимит из 3 попыток.')
+        return
+      }
+      try {
+        await submitQuiz(task.id, value)
+        setDetailedResults(prev => ({ ...prev, [task.id]: undefined })) // clear previous
+        // Sync the local counter with the server after a (possibly
+        // incorrect) submission so the lock stays accurate across reloads.
+        try {
+          const submission = await getTaskSubmission(task.id)
+          setSubmissionDetails(prev => ({ ...prev, [task.id]: submission }))
+          if (submission && submission.incorrect_attempts !== undefined) {
+            setQuizAttempts(prev => {
+              const next = { ...prev, [task.id]: submission.incorrect_attempts }
+              localStorage.setItem(quizAttemptKey(task.id), String(submission.incorrect_attempts))
+              return next
+            })
+          }
+        } catch {}
+      } catch (error: any) {
+        const msg = error?.response?.data?.detail || 'Не удалось отправить ответ'
+        alert(msg)
+        // The server may have rejected the submission because the 3-attempt
+        // limit was already reached (local counter out of sync after a
+        // refresh). Pull the authoritative count back from the server so the
+        // task stays locked instead of letting the user submit again.
+        if (error?.response?.status === 400) {
+          try {
+            const submission = await getTaskSubmission(task.id)
+            setSubmissionDetails(prev => ({ ...prev, [task.id]: submission }))
+            if (submission && submission.incorrect_attempts !== undefined) {
+              setQuizAttempts(prev => {
+                const next = { ...prev, [task.id]: submission.incorrect_attempts }
+                localStorage.setItem(quizAttemptKey(task.id), String(submission.incorrect_attempts))
+                return next
+              })
+            }
+          } catch {}
+        }
+        return
+      }
     } else {
       try {
         const res = await submitCode(task.id, value)
@@ -333,6 +396,19 @@ export default function LessonDetail() {
       } catch (error: any) {
         const detail = error?.response?.data?.detail || 'Не удалось отправить решение'
         alert(detail)
+        // The server may have rejected the submission because the 3-attempt
+        // limit was already reached (e.g. the local counter was out of sync
+        // after a page refresh). Sync the local counter from the server so
+        // the task stays locked instead of letting the user submit again.
+        if (error?.response?.status === 400) {
+          try {
+            const submission = await getTaskSubmission(task.id)
+            setSubmissionDetails(prev => ({ ...prev, [task.id]: submission }))
+            if (submission && submission.incorrect_attempts !== undefined) {
+              localStorage.setItem(quizAttemptKey(task.id), String(submission.incorrect_attempts))
+            }
+          } catch {}
+        }
         return
       }
     }

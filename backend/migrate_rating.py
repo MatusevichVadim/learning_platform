@@ -13,6 +13,7 @@ existing submission history so the leaderboard is correct immediately.
 
 import os
 import sqlite3
+from pathlib import Path
 
 from sqlalchemy import create_engine, select, func
 from sqlalchemy.orm import sessionmaker
@@ -27,13 +28,20 @@ from app.models import User, Submission, Task
 from app.rating import recompute_all_ratings
 
 
+def _resolve_db_path() -> str:
+    """Resolve the SQLite file the same way app.db.DATABASE_URL does."""
+    from dotenv import load_dotenv
+    BACKEND_DIR = Path(__file__).resolve().parent
+    load_dotenv(BACKEND_DIR / ".env")
+    db_path = os.getenv("DB_PATH", "backend_data.sqlite3")
+    if not os.path.isabs(db_path):
+        db_path = str(BACKEND_DIR / db_path)
+    return db_path
+
+
 def migrate_database():
     # Locate the database file (same resolution as app.db.DATABASE_URL).
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend_data.sqlite3")
-    if not os.path.exists(db_path):
-        # Fall back to a database inside the backend folder.
-        alt = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backend_data.sqlite3")
-        db_path = alt if os.path.exists(alt) else db_path
+    db_path = _resolve_db_path()
 
     print(f"[MIGRATE] Using database: {os.path.abspath(db_path)}")
 

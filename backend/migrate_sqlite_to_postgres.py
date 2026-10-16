@@ -41,7 +41,10 @@ from app.models import (
 
 
 def get_sqlite_url() -> str:
-    sqlite_path = os.getenv("SQLITE_DB_PATH", str(BACKEND_DIR / "backend_data.sqlite3"))
+    # Single source of truth: DB_PATH from backend/.env (same as app.db).
+    # SQLITE_DB_PATH still overrides for explicit migration source selection.
+    load_dotenv(BACKEND_DIR / ".env")
+    sqlite_path = os.getenv("SQLITE_DB_PATH") or os.getenv("DB_PATH", "backend_data.sqlite3")
     if not os.path.isabs(sqlite_path):
         sqlite_path = str(BACKEND_DIR / sqlite_path)
     return f"sqlite:///{sqlite_path}"

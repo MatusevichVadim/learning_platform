@@ -1,6 +1,17 @@
+import os
 import sqlite3
+from pathlib import Path
+from dotenv import load_dotenv
 
-conn = sqlite3.connect('backend_data.sqlite3')
+# Resolve DB_PATH from backend/.env (same as app.db) so this migration targets
+# the SAME database the app actually uses.
+BACKEND_DIR = Path(__file__).resolve().parent / "backend"
+load_dotenv(BACKEND_DIR / ".env")
+DB_PATH = os.getenv("DB_PATH", "backend_data.sqlite3")
+if not os.path.isabs(DB_PATH):
+    DB_PATH = str(BACKEND_DIR / DB_PATH)
+
+conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 
 try:

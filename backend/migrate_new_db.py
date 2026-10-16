@@ -14,9 +14,20 @@ from __future__ import annotations
 import os
 import secrets
 from datetime import datetime, timezone
+from pathlib import Path
+from dotenv import load_dotenv
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
+
+# Resolve DB_PATH from backend/.env (same as app.db) so this migration targets
+# the SAME database the app actually uses. There is only ONE database.
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(BACKEND_DIR / ".env")
+OLD_DB = os.getenv("DB_PATH", "backend_data.sqlite3")
+if not os.path.isabs(OLD_DB):
+    OLD_DB = str(Path(BACKEND_DIR) / OLD_DB)
+NEW_DB = str(Path(OLD_DB).with_suffix("")) + "_new.sqlite3"
 
 from app.db import Base
 import app.models  # noqa: F401  (register all models on Base.metadata)
@@ -44,10 +55,6 @@ def _parse_dt(value):
                 continue
         return value
     return value
-
-BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-OLD_DB = os.path.join(BACKEND_DIR, "backend_data.sqlite3")
-NEW_DB = os.path.join(BACKEND_DIR, "backend_data_new.sqlite3")
 
 SIMPLE_TABLES = ["languages", "lessons", "tasks", "submissions"]
 
@@ -170,17 +177,17 @@ def main() -> None:
     print("STEP 5: SWAP WITH BACKUP")
     print("=" * 70)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_name = f"backend_data_old_backup_{timestamp}.sqlite3"
-    backup_path = os.path.join(BACKEND_DIR, backup_name)
+    backup_name = f"{os.path.basename(OLD_DB).replace('.sqlite3', '')}_old_backup_{timestamp}.sqlite3"
+    backup_path = os.path.join(Path(OLD_DB).parent, backup_name)
 
     os.rename(OLD_DB, backup_path)
     print(f"Backed up old DB -> {backup_name}")
     os.rename(NEW_DB, OLD_DB)
-    print(f"Swapped new DB into place -> backend_data.sqlite3")
+    print(f"Swapped new DB into place -> {OLD_DB}")
 
     print()
     print("=" * 70)
-    print("DONE. Active backend_data.sqlite3 is now the migrated DB.")
+    print(f"DONE. Active DB ({OLD_DB}) is now the migrated DB.")
     print("NOTE: The running uvicorn server (Terminal 1) MUST be restarted")
     print("      to pick up the new database.")
     print("=" * 70)

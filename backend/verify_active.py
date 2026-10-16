@@ -1,12 +1,21 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
 
-ROOT = r"d:\WORK\Python\rrrr"
-ACTIVE = os.path.join(ROOT, "backend_data.sqlite3")
+BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
 
-eng = create_engine(f"sqlite:///{ACTIVE}", connect_args={"check_same_thread": False}, future=True)
+# Resolve DB_PATH from backend/.env (same as app.db) so this script inspects
+# the SAME database the app actually uses.
+DB_PATH = os.getenv("DB_PATH", "backend_data.sqlite3")
+if not os.path.isabs(DB_PATH):
+    DB_PATH = str(BACKEND_DIR / DB_PATH)
+
+eng = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False}, future=True)
 insp = inspect(eng)
-print("ACTIVE:", ACTIVE)
+print("ACTIVE:", DB_PATH)
 print("users columns:", [c["name"] for c in insp.get_columns("users")])
 
 with eng.connect() as c:

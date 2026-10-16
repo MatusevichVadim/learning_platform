@@ -6,11 +6,21 @@ Migration script to migrate data from old database to new database with language
 import sqlite3
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 def migrate_database():
-    # Paths
-    backup_db = "backend_data_backup.sqlite3"
-    new_db = "backend/backend_data.sqlite3"
+    # Resolve DB_PATH from backend/.env (same as app.db) so this migration
+    # targets the SAME database the app actually uses.
+    BACKEND_DIR = Path(__file__).resolve().parent / "backend"
+    load_dotenv(BACKEND_DIR / ".env")
+    db_path = os.getenv("DB_PATH", "backend_data.sqlite3")
+    if not os.path.isabs(db_path):
+        db_path = str(BACKEND_DIR / db_path)
+
+    # Backup DB is the active DB with a _backup suffix (same convention used by
+    # the migration scripts), so it always tracks the single source of truth.
+    backup_db = str(Path(db_path).with_suffix("")) + "_backup.sqlite3"
+    new_db = db_path
 
     if not os.path.exists(backup_db):
         print(f"Backup database {backup_db} not found!")

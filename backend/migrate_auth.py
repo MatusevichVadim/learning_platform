@@ -11,13 +11,15 @@ import os
 import sys
 import secrets
 from datetime import datetime
+from pathlib import Path
 
 # Add parent directory to path so we can import app modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
 
-load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
 
 from sqlalchemy import create_engine, text, inspect
 import bcrypt
@@ -27,7 +29,12 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 # instead of a weak hardcoded default.
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD") or secrets.token_urlsafe(12)
 
-DATABASE_URL = "sqlite:///./backend_data.sqlite3"
+# Resolve DB_PATH from backend/.env (same as app.db) so every script targets
+# the SAME database the app actually uses.
+DB_PATH = os.getenv("DB_PATH", "backend_data.sqlite3")
+if not os.path.isabs(DB_PATH):
+    DB_PATH = str(BACKEND_DIR / DB_PATH)
+DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 
 def migrate():

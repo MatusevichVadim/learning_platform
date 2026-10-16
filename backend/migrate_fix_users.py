@@ -5,12 +5,23 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dotenv import load_dotenv
+
+BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
+
 from sqlalchemy import create_engine, text, inspect
 
-DATABASE_URL = "sqlite:///./backend_data.sqlite3"
+# Resolve DB_PATH from backend/.env (same as app.db) so every script targets
+# the SAME database the app actually uses.
+DB_PATH = os.getenv("DB_PATH", "backend_data.sqlite3")
+if not os.path.isabs(DB_PATH):
+    DB_PATH = str(BACKEND_DIR / DB_PATH)
+DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 
 def migrate():

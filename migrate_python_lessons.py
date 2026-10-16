@@ -1,8 +1,20 @@
+import os
 import sqlite3
+from pathlib import Path
+from dotenv import load_dotenv
 
-# Paths to databases
-backup_db = 'backend/backend_data_backup.sqlite3'
-main_db = 'backend/backend_data.sqlite3'
+# Resolve DB_PATH from backend/.env (same as app.db) so this script targets
+# the SAME database the app actually uses. There is only ONE database.
+BACKEND_DIR = Path(__file__).resolve().parent / "backend"
+load_dotenv(BACKEND_DIR / ".env")
+DB_PATH = os.getenv("DB_PATH", "backend_data.sqlite3")
+if not os.path.isabs(DB_PATH):
+    DB_PATH = str(BACKEND_DIR / DB_PATH)
+
+# Backup DB is the active DB with a _backup suffix (same convention used by
+# the migration scripts), so it always tracks the single source of truth.
+backup_db = str(Path(DB_PATH).with_suffix("")) + "_backup.sqlite3"
+main_db = DB_PATH
 
 # Connect to databases
 backup_conn = sqlite3.connect(backup_db)

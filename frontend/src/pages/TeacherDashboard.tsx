@@ -18,6 +18,7 @@ import {
   logout,
 } from '../api'
 import CardChart from '../components/CardChart'
+import LeaderboardModal from '../components/LeaderboardModal'
 import LessonProgress from '../components/LessonProgress'
 import { formatDateTime } from '../utils/date'
 
@@ -98,6 +99,7 @@ export default function TeacherDashboard() {
   const [resetPasswordId, setResetPasswordId] = useState<number | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [languageModalStudent, setLanguageModalStudent] = useState<Student | null>(null)
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
   const [selectedStudentLanguageIds, setSelectedStudentLanguageIds] = useState<string[]>([])
   const [languageSaveLoading, setLanguageSaveLoading] = useState(false)
 
@@ -1403,11 +1405,15 @@ export default function TeacherDashboard() {
           <span style={{ fontSize: 14, color: '#a9b1bb' }}>
             {'Назначенные классы: '}{classes.length > 0 ? classes.join(', ') : 'нет'}
           </span>
+          <button className="btn" onClick={() => setShowLeaderboard(true)} style={{ backgroundColor: '#f39c12', color: '#000' }}>
+            {'Лидерборд'}
+          </button>
           <button className="btn" onClick={handleLogout} style={{ backgroundColor: '#dc3545' }}>
             {'Выйти'}
           </button>
         </div>
       </div>
+      {showLeaderboard && <LeaderboardModal onClose={() => setShowLeaderboard(false)} />}
 
       <div className="tabs" style={{ justifyContent: 'flex-start', marginBottom: 16 }}>
         <button

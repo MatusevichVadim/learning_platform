@@ -3,12 +3,20 @@
 Initialize new database with correct schema and seed data.
 """
 
+import os
 import sqlite3
 from datetime import datetime
+from pathlib import Path
+from dotenv import load_dotenv
 
 def init_new_database():
-    # Database path
-    db_path = "backend/backend_data.sqlite3"
+    # Resolve DB_PATH from backend/.env (same as app.db) so this script
+    # initializes the SAME database the app actually uses.
+    BACKEND_DIR = Path(__file__).resolve().parent / "backend"
+    load_dotenv(BACKEND_DIR / ".env")
+    db_path = os.getenv("DB_PATH", "backend_data.sqlite3")
+    if not os.path.isabs(db_path):
+        db_path = str(BACKEND_DIR / db_path)
 
     # Create new database
     conn = sqlite3.connect(db_path)

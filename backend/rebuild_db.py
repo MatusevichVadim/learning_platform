@@ -1,23 +1,30 @@
 """
-Rebuild the ACTIVE backend_data.sqlite3 (the one the uvicorn server actually
-reads, which is d:/WORK/Python/rrrr/backend_data.sqlite3 because start.bat
-launches uvicorn from the project root) into the NEW auth schema, preserving
-ALL original data.
+Rebuild the ACTIVE database (the one the uvicorn server actually reads, which
+is resolved from DB_PATH in backend/.env by app/db.py) into the NEW auth
+schema, preserving ALL original data.
 
-SOURCE = root backend_data.sqlite3 (OLD users schema, full data).
+SOURCE = the DB_PATH the app uses (single source of truth).
 We rebuild into a temp file, verify, then swap into place.
 """
 import os
 import secrets
 from datetime import datetime
+from pathlib import Path
+from dotenv import load_dotenv
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
-ROOT = r"d:\WORK\Python\rrrr"
-SOURCE = os.path.join(ROOT, "backend_data.sqlite3")
-REBUILT = os.path.join(ROOT, "backend_data_rebuilt.sqlite3")
-BACKEND_ACTIVE = os.path.join(ROOT, "backend", "backend_data.sqlite3")
+# Resolve DB_PATH from backend/.env (same as app.db) so this script targets
+# the SAME database the app actually uses. There is only ONE database.
+BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
+SOURCE = os.getenv("DB_PATH", "backend_data.sqlite3")
+if not os.path.isabs(SOURCE):
+    SOURCE = str(BACKEND_DIR / SOURCE)
+REBUILT = str(Path(SOURCE).with_suffix("")) + "_rebuilt.sqlite3"
+# Keep backend/ in sync with the active DB (same file if DB_PATH already lives there).
+BACKEND_ACTIVE = str(BACKEND_DIR / os.path.basename(SOURCE))
 
 # ---- import models (registers tables on Base) ----
 from app.db import Base
@@ -141,7 +148,7 @@ new.flush()
 print(f"copied users: {len(src_users)} rows")
 
 # Save temp passwords to a file for the operator's convenience.
-pw_file = os.path.join(ROOT, "temp_passwords.txt")
+pw_file = os.path.join(Path(SOURCE).parent, "temp_passwords.txt")
 with open(pw_file, "w", encoding="utf-8") as f:
     f.write("# TEMPORARY user passwords (generated during DB rebuild)\n")
     f.write("# Format: user_id | username | temp_password\n")
@@ -196,17 +203,17 @@ print("\nVERIFICATION PASSED.")
 # ============ STEP 6: swap ============
 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-# 6a. root (the real active DB the server reads)
-broken_backup_root = os.path.join(ROOT, f"backend_data_broken_backup_{ts}.sqlite3")
+# 6a. active (the real DB the server reads)
+broken_backup_root = os.path.join(Path(SOURCE).parent, f"{os.path.basename(SOURCE).replace('.sqlite3','')}_broken_backup_{ts}.sqlite3")
 os.rename(SOURCE, broken_backup_root)
 os.rename(REBUILT, SOURCE)
-print(f"root: renamed active -> {os.path.basename(broken_backup_root)}")
-print(f"root: renamed rebuilt -> backend_data.sqlite3")
+print(f"active: renamed -> {os.path.basename(broken_backup_root)}")
+print(f"active: renamed rebuilt -> {os.path.basename(SOURCE)}")
 
-# 6b. also sync backend/backend_data.sqlite3 so it has the full data too
+# 6b. also sync backend/<same basename> so it has the full data too
 if os.path.abspath(BACKEND_ACTIVE) != os.path.abspath(SOURCE):
     if os.path.exists(BACKEND_ACTIVE):
-        bb = os.path.join(ROOT, "backend", f"backend_data_broken_backup_{ts}.sqlite3")
+        bb = os.path.join(Path(BACKEND_ACTIVE).parent, f"{os.path.basename(BACKEND_ACTIVE).replace('.sqlite3','')}_broken_backup_{ts}.sqlite3")
         try:
             os.rename(BACKEND_ACTIVE, bb)
             print(f"backend/: renamed old -> {os.path.basename(bb)}")
@@ -214,7 +221,6 @@ if os.path.abspath(BACKEND_ACTIVE) != os.path.abspath(SOURCE):
             print(f"backend/: could not rename old ({e}); will overwrite copy")
     import shutil
     shutil.copy2(SOURCE, BACKEND_ACTIVE)
-    print("backend/: copied rebuilt DB into backend/backend_data.sqlite3")
+    print(f"backend/: copied rebuilt DB into {BACKEND_ACTIVE}")
 
 print("\nDONE. Temp passwords saved to:", pw_file)
-print("Original backup kept: backend/backend_data_old_backup_20260824_175523.sqlite3")
