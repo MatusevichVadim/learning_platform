@@ -88,13 +88,7 @@ def get_card(
 
     rows = db.execute(stmt).all()
     submissions = []
-    seen_tasks = set()
     for s, lesson_id, task_title, lesson_title, language in rows:
-        # Show each task only once (latest submission), so the same
-        # correctly-solved task is not counted/tallied multiple times.
-        if s.task_id in seen_tasks:
-            continue
-        seen_tasks.add(s.task_id)
         status = getattr(s, 'status', 'completed')
         submissions.append({
             "id": s.id,
