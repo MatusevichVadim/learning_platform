@@ -86,8 +86,23 @@ def list_students(
     stmt = select(User).where(User.user_class.in_(classes), User.role == "user")
 
     if search:
-        like = f"%{search}%"
-        stmt = stmt.where(or_(User.username.ilike(like), User.full_name.ilike(like)))
+        needle = search.casefold()
+        users_all = db.execute(stmt).scalars().all()
+        filtered = [
+            u for u in users_all
+            if needle in (u.username or "").casefold()
+            or needle in (u.full_name or "").casefold()
+        ]
+        reverse = order != "asc"
+        key_map = {
+            "id": lambda u: u.id,
+            "username": lambda u: (u.username or "").casefold(),
+            "full_name": lambda u: (u.full_name or "").casefold(),
+            "user_class": lambda u: (u.user_class or "").casefold(),
+            "created_at": lambda u: u.created_at,
+        }
+        filtered.sort(key=key_map.get(sort_by, key_map["username"]), reverse=reverse)
+        return filtered
 
     sort_columns = {
         "id": User.id,
@@ -600,8 +615,10 @@ def list_submissions(
     if class_filter:
         student_stmt = student_stmt.where(User.user_class == class_filter)
     if student_filter:
-        like = f"%{student_filter}%"
-        student_stmt = student_stmt.where(or_(User.username.ilike(like), User.full_name.ilike(like)))
+        needle = student_filter.casefold()
+        all_students = db.execute(student_stmt).scalars().all()
+        filtered_ids = [u.id for u in all_students if needle in (u.username or "").casefold() or needle in (u.full_name or "").casefold()]
+        student_stmt = select(User.id).where(User.id.in_(filtered_ids)) if filtered_ids else select(User.id).where(False)
     student_ids = db.execute(student_stmt).scalars().all()
 
     if not student_ids:

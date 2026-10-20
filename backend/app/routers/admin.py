@@ -71,8 +71,27 @@ def list_users(
     stmt = select(User)
 
     if search:
-        like = f"%{search}%"
-        stmt = stmt.where(or_(User.username.ilike(like), User.full_name.ilike(like), User.user_class.ilike(like)))
+        needle = search.casefold()
+        users_all = db.execute(stmt).scalars().all()
+        filtered = [
+            u for u in users_all
+            if needle in (u.username or "").casefold()
+            or needle in (u.full_name or "").casefold()
+            or needle in (u.user_class or "").casefold()
+        ]
+        reverse = order != "asc"
+        key_map = {
+            "id": lambda u: u.id,
+            "username": lambda u: (u.username or "").casefold(),
+            "full_name": lambda u: (u.full_name or "").casefold(),
+            "role": lambda u: u.role,
+            "is_active": lambda u: u.is_active,
+            "created_at": lambda u: u.created_at,
+            "rating": lambda u: (u.rating or 0) + (u.rating_bonus or 0),
+            "user_class": lambda u: (u.user_class or "").casefold(),
+        }
+        filtered.sort(key=key_map.get(sort_by, key_map["created_at"]), reverse=reverse)
+        return filtered
 
     sort_columns = {
         "id": User.id,
