@@ -653,6 +653,19 @@ export default function SubmissionsTab() {
                 </button>
               </div>
             )}
+
+            {selectedSubmission.status !== 'pending' && (
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+                <button
+                  className="btn"
+                  onClick={() => reviewSubmission(selectedSubmission.id, !selectedSubmission.is_correct)}
+                  disabled={loading}
+                  style={{ backgroundColor: selectedSubmission.is_correct ? '#dc3545' : '#28a745' }}
+                >
+                  {selectedSubmission.is_correct ? '✗ Пометить неправильным' : '✓ Пометить правильным'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

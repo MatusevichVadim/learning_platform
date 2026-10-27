@@ -1095,6 +1095,19 @@ export default function TeacherDashboard() {
                 </div>
               )}
 
+              {selectedSubmission.status !== 'pending' && (
+                <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+                  <button
+                    className="btn"
+                    onClick={() => handleReviewSubmission(!selectedSubmission.is_correct)}
+                    disabled={reviewLoading}
+                    style={{ backgroundColor: selectedSubmission.is_correct ? '#dc3545' : '#28a745' }}
+                  >
+                    {selectedSubmission.is_correct ? '✗ Пометить неправильным' : '✓ Пометить правильным'}
+                  </button>
+                </div>
+              )}
+
             </div>
           </div>
         )}
