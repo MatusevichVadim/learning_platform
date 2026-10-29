@@ -26,7 +26,7 @@ export default function UsersTab() {
   const [users, setUsers] = useState<User[]>([])
   const [showModal, setShowModal] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [form, setForm] = useState({ username: '', password: '', full_name: '', role: 'user', user_class: '', rating_bonus: 0 })
+  const [form, setForm] = useState({ username: '', password: '', full_name: '', role: 'user', user_class: '', rating_change: '' })
   const [resetPasswordId, setResetPasswordId] = useState<number | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [deleteUserId, setDeleteUserId] = useState<number | null>(null)
@@ -173,13 +173,13 @@ export default function UsersTab() {
 
   function openAddModal() {
     setEditingUser(null)
-    setForm({ username: '', password: '', full_name: '', role: 'user', user_class: '', rating_bonus: 0 })
+    setForm({ username: '', password: '', full_name: '', role: 'user', user_class: '', rating_change: '' })
     setShowModal(true)
   }
 
   function openEditModal(user: User) {
     setEditingUser(user)
-    setForm({ username: user.username, password: '', full_name: user.full_name || '', role: user.role, user_class: user.user_class || '', rating_bonus: user.rating_bonus ?? 0 })
+    setForm({ username: user.username, password: '', full_name: user.full_name || '', role: user.role, user_class: user.user_class || '', rating_change: '' })
     setShowModal(true)
   }
 
@@ -189,15 +189,21 @@ export default function UsersTab() {
     setMessage('')
     try {
       if (editingUser) {
-        await updateUser(editingUser.id, {
+        const payload: any = {
           username: form.username,
           full_name: form.full_name || undefined,
           role: form.role,
           is_active: editingUser.is_active,
-          rating_bonus: Number(form.rating_bonus) || 0,
           user_class: form.user_class || undefined,
-        })
-        setMessage('Успешно')
+        }
+        if (form.rating_change !== '' && form.rating_change !== null && form.rating_change !== undefined) {
+          const delta = Number(form.rating_change)
+          if (!isNaN(delta)) {
+            payload.rating_bonus = (editingUser.rating_bonus ?? 0) + delta
+          }
+        }
+        await updateUser(editingUser.id, payload)
+        setLangToast('Успешно')
       } else {
         await createUser({
           username: form.username,
@@ -206,7 +212,7 @@ export default function UsersTab() {
           role: form.role,
           user_class: form.user_class || undefined,
         })
-        setMessage('Успешно')
+        setLangToast('Успешно')
       }
       setShowModal(false)
       loadUsers()
@@ -222,7 +228,7 @@ export default function UsersTab() {
     setLoading(true)
     try {
       await resetUserPassword(resetPasswordId, newPassword)
-      setMessage('Успешно')
+      setLangToast('Успешно')
       setResetPasswordId(null)
       setNewPassword('')
     } catch (err: any) {
@@ -249,7 +255,7 @@ export default function UsersTab() {
     setLoading(true)
     try {
       await deleteUser(deleteUserId)
-      setMessage('Успешно')
+      setLangToast('Успешно')
       setDeleteUserId(null)
       loadUsers()
     } catch (err: any) {
@@ -396,12 +402,21 @@ export default function UsersTab() {
                   <input
                     className="input"
                     type="number"
-                    value={form.rating_bonus}
-                    onChange={e => setForm({ ...form, rating_bonus: Number(e.target.value) })}
-                    placeholder={'0'}
+                    value={form.rating_change}
+                    onChange={e => setForm({ ...form, rating_change: e.target.value })}
+                    placeholder={''}
                   />
                   <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
-                    {'Итоговый рейтинг: '}{((editingUser.rating ?? 0) - (editingUser.rating_bonus ?? 0) + (Number(form.rating_bonus) || 0))}
+                    {'Итоговый рейтинг: '}{(() => {
+                      const base = (editingUser.rating ?? 0)
+                      const currentBonus = editingUser.rating_bonus ?? 0
+                      if (form.rating_change === '' || form.rating_change === null || form.rating_change === undefined) {
+                        return base + currentBonus
+                      }
+                      const delta = Number(form.rating_change)
+                      if (isNaN(delta)) return base + currentBonus
+                      return base + currentBonus + delta
+                    })()}
                   </div>
                 </div>
               )}
@@ -605,7 +620,7 @@ export default function UsersTab() {
         </div>
       )}
       {langToast && (
-        <div style={{ position: 'fixed', top: 10, right: 10, backgroundColor: '#4caf50', color: 'white', padding: '8px 16px', borderRadius: 4, zIndex: 1000 }}>
+        <div style={{ position: 'fixed', top: 10, right: 10, backgroundColor: '#3dd179', color: 'white', padding: '8px 16px', borderRadius: 4, zIndex: 1000 }}>
           {langToast}
         </div>
       )}

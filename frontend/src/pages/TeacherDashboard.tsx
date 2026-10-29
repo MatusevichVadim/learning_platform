@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   teacherGetClasses,
@@ -49,6 +49,8 @@ export default function TeacherDashboard() {
   const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [reviewToast, setReviewToast] = useState('')
+  const reviewToastTimer = useRef<any>(null)
 
   // Lessons tab state
   const [languages, setLanguages] = useState<Language[]>([])
@@ -390,7 +392,10 @@ export default function TeacherDashboard() {
       setSubmissionComment('')
       setSubmissionTaskDescription('')
       setSubmissionTaskKind('')
-      setMessage(isCorrect ? 'Решение отмечено как правильное' : 'Решение отмечено как неправильное')
+      const toastMsg = isCorrect ? 'Решение отмечено как правильное' : 'Решение отмечено как неправильное'
+      setReviewToast(toastMsg)
+      if (reviewToastTimer.current) clearTimeout(reviewToastTimer.current)
+      reviewToastTimer.current = setTimeout(() => setReviewToast(''), 2000)
     } catch (err: any) {
       setMessage(err.response?.data?.detail || 'Ошибка при проверке решения')
     } finally {
@@ -439,7 +444,9 @@ export default function TeacherDashboard() {
         full_name: editForm.full_name || undefined,
         password: editForm.password || undefined,
       })
-      setMessage('Ученик обновлен')
+      setReviewToast('Ученик обновлен')
+      if (reviewToastTimer.current) clearTimeout(reviewToastTimer.current)
+      reviewToastTimer.current = setTimeout(() => setReviewToast(''), 2000)
       setEditStudent(null)
       setEditForm({ full_name: '', password: '' })
       loadStudents()
@@ -482,7 +489,9 @@ export default function TeacherDashboard() {
     setMessage('')
     try {
       await teacherSetStudentLanguages(languageModalStudent.id, selectedStudentLanguageIds)
-      setSuccessMessage('Языки ученика обновлены')
+      setReviewToast('Языки ученика обновлены')
+      if (reviewToastTimer.current) clearTimeout(reviewToastTimer.current)
+      reviewToastTimer.current = setTimeout(() => setReviewToast(''), 2000)
       setLanguageModalStudent(null)
       setSelectedStudentLanguageIds([])
       loadStudents()
@@ -1471,7 +1480,11 @@ export default function TeacherDashboard() {
         </button>
       </div>
 
-      {message && <div style={{ marginBottom: 12, color: message.includes('Ошибка') || message.includes('должен') ? '#dc3545' : '#3dd179' }}>{message}</div>}
+      {reviewToast && (
+        <div style={{ position: 'fixed', top: 10, right: 10, backgroundColor: '#3dd179', color: 'white', padding: '8px 16px', borderRadius: 4, zIndex: 1000 }}>
+          {reviewToast}
+        </div>
+      )}
 
       {activeTab === 'lessons' && renderLessonsTab()}
       {activeTab === 'results' && (submissionsLoading ? <div className="card"><p style={{ color: '#a9b1bb' }}>{'Загрузка...'}</p></div> : renderResultsTab())}

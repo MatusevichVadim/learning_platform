@@ -319,19 +319,27 @@ def leaderboard(user: User = Depends(get_current_user), db: Session = Depends(ge
     """
     from sqlalchemy import desc as _desc
     # Only active (non-blocked) non-admin users appear in the leaderboard.
-    users = db.execute(
-        select(User)
+    from sqlalchemy import func
+    rows = db.execute(
+        select(
+            User.id,
+            User.username,
+            User.full_name,
+            User.rating,
+            User.rating_bonus,
+            User.user_class,
+        )
         .where(User.is_active.is_(True), User.role.notin_(["admin", "teacher"]))
-        .order_by(_desc(User.rating + User.rating_bonus))
-    ).scalars().all()
+        .order_by(_desc(func.coalesce(User.rating, 0) + func.coalesce(User.rating_bonus, 0)), _desc(User.id))
+    ).all()
     return [
         {
-            "id": u.id,
-            "username": u.username,
-            "full_name": u.full_name or u.username,
-            "rating": effective_rating(u),
-            "rating_bonus": u.rating_bonus or 0,
-            "user_class": u.user_class,
+            "id": r.id,
+            "username": r.username,
+            "full_name": r.full_name or r.username,
+            "rating": (r.rating or 0) + (r.rating_bonus or 0),
+            "rating_bonus": r.rating_bonus or 0,
+            "user_class": r.user_class,
         }
-        for u in users
+        for r in rows
     ]

@@ -46,7 +46,7 @@ export default function LeaderboardModal({ onClose }: { onClose: () => void }) {
     }
     const sorted = [...list].sort((a, b) => {
       let cmp = 0
-      if (sortKey === 'rating') cmp = (a.rating + (a.rating_bonus || 0)) - (b.rating + (b.rating_bonus || 0))
+      if (sortKey === 'rating') cmp = (a.rating || 0) - (b.rating || 0)
       else if (sortKey === 'name') cmp = (a.full_name || a.username).localeCompare(b.full_name || b.username)
       else if (sortKey === 'class') cmp = (a.user_class || '').localeCompare(b.user_class || '')
       return sortDir === 'asc' ? cmp : -cmp

@@ -32,6 +32,7 @@ export default function SubmissionsTab() {
   const [taskKind, setTaskKind] = useState('')
   const [loading, setLoading] = useState(false)
   const [copiedCode, setCopiedCode] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const navigate = useNavigate()
 
   // Filter states.  All filtering/sorting is performed by the server: the
@@ -159,6 +160,21 @@ export default function SubmissionsTab() {
     } catch (error) {
       console.error('Failed to review submission:', error)
       alert('Ошибка при проверке решения')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function deleteSubmission(submissionId: number) {
+    setLoading(true)
+    try {
+      await axios.delete(`/api/admin/submissions/${submissionId}`, { headers: authHeaders() })
+      setSubmissions(prev => prev.filter(s => s.id !== submissionId))
+      setSelectedSubmission(null)
+      refresh()
+    } catch (error) {
+      console.error('Failed to delete submission:', error)
+      alert('Ошибка при удалении решения')
     } finally {
       setLoading(false)
     }
@@ -655,7 +671,7 @@ export default function SubmissionsTab() {
             )}
 
             {selectedSubmission.status !== 'pending' && (
-              <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+              <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
                 <button
                   className="btn"
                   onClick={() => reviewSubmission(selectedSubmission.id, !selectedSubmission.is_correct)}
@@ -664,12 +680,68 @@ export default function SubmissionsTab() {
                 >
                   {selectedSubmission.is_correct ? '✗ Пометить неправильным' : '✓ Пометить правильным'}
                 </button>
+                <button
+                  className="btn"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={loading}
+                  style={{ backgroundColor: '#dc3545' }}
+                >
+                  🗑 Удалить решение
+                </button>
               </div>
             )}
           </div>
         </div>
       )}
 
+      {showDeleteConfirm && selectedSubmission && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100
+          }}
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <div
+            style={{
+              backgroundColor: '#151c2c',
+              border: '1px solid #243049',
+              borderRadius: '14px',
+              padding: '20px',
+              maxWidth: '400px',
+              width: '90%'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 12px', color: '#e6edf3' }}>Удалить решение?</h3>
+            <p style={{ color: '#a9b1bb', marginBottom: '20px' }}>Это действие нельзя отменить.</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button className="btn" onClick={() => setShowDeleteConfirm(false)} disabled={loading} style={{ backgroundColor: '#3dd179', color: '#092013' }}>
+                Отмена
+              </button>
+              <button
+                className="btn"
+                onClick={async () => {
+                  await deleteSubmission(selectedSubmission.id)
+                  setShowDeleteConfirm(false)
+                }}
+                disabled={loading}
+                style={{ backgroundColor: '#dc3545' }}
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

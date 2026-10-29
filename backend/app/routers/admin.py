@@ -801,6 +801,18 @@ def review_submission(submission_id: int, data: dict, current_user: User = Depen
     return {"status": "reviewed", "is_correct": is_correct}
 
 
+@router.delete("/submissions/{submission_id}")
+def delete_submission(submission_id: int, current_user: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    submission = db.get(Submission, submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    user_id = submission.user_id
+    db.delete(submission)
+    db.flush()
+    recompute_user_rating(db, user_id)
+    return {"status": "deleted"}
+
+
 # --- Languages ---
 
 @router.post("/languages")

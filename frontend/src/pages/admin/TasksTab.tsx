@@ -616,7 +616,7 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
         </div>
       </div>
       {showSuccess && (
-        <div style={{ position: 'fixed', top: 10, right: 10, backgroundColor: '#4caf50', color: 'white', padding: '8px 16px', borderRadius: 4, zIndex: 1000 }}>
+        <div style={{ position: 'fixed', top: 10, right: 10, backgroundColor: '#3dd179', color: 'white', padding: '8px 16px', borderRadius: 4, zIndex: 1000 }}>
           Задание успешно обновлено
         </div>
       )}

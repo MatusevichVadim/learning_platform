@@ -28,6 +28,7 @@ export default function TeachersTab() {
   const [allClasses, setAllClasses] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [toast, setToast] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [newTeacherForm, setNewTeacherForm] = useState({ username: '', password: '', full_name: '' })
   const [showAssignModal, setShowAssignModal] = useState(false)
@@ -36,6 +37,8 @@ export default function TeachersTab() {
   const [selectedClass, setSelectedClass] = useState('')
   const [classRefreshKey, setClassRefreshKey] = useState(0)
   const [deleteTeacherId, setDeleteTeacherId] = useState<number | null>(null)
+
+  useEffect(() => { if (toast) { const t = setTimeout(() => setToast(''), 2000); return () => clearTimeout(t) } }, [toast])
 
   useEffect(() => {
     loadTeachers()
@@ -103,7 +106,7 @@ export default function TeachersTab() {
     setMessage('')
     try {
       await adminAssignClassToTeacher(assignTeacherId, selectedClass)
-      setMessage('Класс назначен')
+      setToast('Класс назначен')
       setShowAssignModal(false)
       setSelectedClass('')
       await loadTeacherClasses(assignTeacherId)
@@ -120,7 +123,7 @@ export default function TeachersTab() {
     setMessage('')
     try {
       await adminUnassignClassFromTeacher(teacherId, userClass)
-      setMessage('Класс отозван')
+      setToast('Класс отозван')
       await loadTeacherClasses(teacherId)
       setClassRefreshKey(key => key + 1)
     } catch (err: any) {
@@ -174,6 +177,11 @@ export default function TeachersTab() {
         </button>
       </div>
 
+      {toast && (
+        <div style={{ position: 'fixed', top: 10, right: 10, backgroundColor: '#3dd179', color: 'white', padding: '8px 16px', borderRadius: 4, zIndex: 1000 }}>
+          {toast}
+        </div>
+      )}
       {message && <div style={{ marginBottom: 12, color: message.includes('Ошибка') ? '#dc3545' : '#3dd179' }}>{message}</div>}
 
       <div style={{ overflowX: 'auto' }}>
