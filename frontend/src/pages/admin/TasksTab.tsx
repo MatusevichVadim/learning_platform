@@ -20,6 +20,7 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null)
   const [quizOptions, setQuizOptions] = useState<Array<{ text: string; correct: boolean }>>([])
   const [showSuccess, setShowSuccess] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedLessonForFilter, setSelectedLessonForFilter] = useState<number | null>(null)
 
   // New state for tabs and code tests
@@ -32,6 +33,10 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
   // State for description preview
   const [showDescriptionPreview, setShowDescriptionPreview] = useState(false)
   const [showMarkdownHelp, setShowMarkdownHelp] = useState(false)
+  const [showBulk, setShowBulk] = useState(false)
+  const [bulkJson, setBulkJson] = useState('')
+  const [bulkMsg, setBulkMsg] = useState('')
+  useEffect(() => { if (bulkMsg) { const t = setTimeout(() => setBulkMsg(''), 2000); return () => clearTimeout(t) } }, [bulkMsg])
 
   useEffect(() => { refresh() }, [])
 
@@ -176,6 +181,21 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
     setRunAllTests(false)
   }
 
+  async function bulkCreate() {
+    if (!selectedLessonId) { alert('Выберите урок'); return }
+    let arr: any[]
+    try { arr = JSON.parse(bulkJson) } catch { setBulkMsg('Неверный формат JSON'); return }
+    if (!Array.isArray(arr)) { setBulkMsg('Неверный формат: ожидается массив'); return }
+    for (const t of arr) {
+      const payload: any = { lesson_id: selectedLessonId, language: filterLang || 'python', title: t.title, description: t.description || '', kind: t.kind || 'quiz', test_spec: t.test_spec, rating: Number(t.rating) || 1 }
+      await axios.post('/api/admin/tasks', payload, { headers: authHeaders() })
+    }
+    await refresh()
+    setBulkMsg(`Добавлено заданий: ${arr.length}`)
+    setShowBulk(false)
+    setBulkJson('')
+  }
+
   async function updateTask() {
     if (form.kind === 'quiz') {
       const options = quizOptions.map(o => o.text).filter(Boolean)
@@ -202,7 +222,12 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
 
   async function deleteTask() {
     if (!selectedId) return
-    if (!confirm('Вы уверены, что хотите удалить это задание?')) return
+    setShowDeleteConfirm(true)
+  }
+
+  async function confirmDeleteTask() {
+    if (!selectedId) return
+    setShowDeleteConfirm(false)
     try {
       await axios.delete(`/api/admin/tasks/${selectedId}`, { headers: authHeaders() })
       await refresh()
@@ -595,6 +620,17 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
           Задание успешно обновлено
         </div>
       )}
+      {showDeleteConfirm && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+          <div style={{ backgroundColor: '#151c2c', color: '#e6edf3', padding: 24, borderRadius: 10, maxWidth: 400, width: '90%', border: '1px solid #243049' }}>
+            <p style={{ marginBottom: 16 }}>Вы уверены, что хотите удалить это задание?</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => setShowDeleteConfirm(false)} style={{ padding: '6px 12px', background: 'transparent', color: '#e6edf3', border: '1px solid #243049', borderRadius: 8, cursor: 'pointer' }}>Отмена</button>
+              <button onClick={confirmDeleteTask} style={{ padding: '6px 12px', backgroundColor: '#3dd179', color: '#092013', border: 'none', borderRadius: 8, cursor: 'pointer' }}>Удалить</button>
+            </div>
+          </div>
+        </div>
+      )}
       {view === 'update' && (
         <div style={{ marginBottom: 12 }}>
           {filterLang && (
@@ -799,26 +835,28 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
           </>
         ) : (view === 'add' && selectedLessonId) ? (
           <>
-            <div className="form-row full-row">
-              <label>Тип</label>
-              <select className="select" value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}>
-                <option value="quiz">quiz</option>
-                <option value="code">code</option>
-              </select>
-            </div>
-            <div className="form-row full-row">
-              <label>Заголовок</label>
-              <input className="input" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
-            </div>
-            <div className="form-row full-row">
-              <label>Рейтинг задания (1–5)</label>
-              <select className="select" value={Number(form.rating) || 1} onChange={e => setForm({ ...form, rating: Number(e.target.value) })}>
-                <option value={1}>1</option>
-                <option value={2}>2</option>
-                <option value={3}>3</option>
-                <option value={4}>4</option>
-                <option value={5}>5</option>
-              </select>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div className="form-row" style={{ flex: '0 0 140px' }}>
+                <label>Тип</label>
+                <select className="select" value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}>
+                  <option value="quiz">quiz</option>
+                  <option value="code">code</option>
+                </select>
+              </div>
+              <div className="form-row" style={{ flex: '1 1 240px' }}>
+                <label>Заголовок</label>
+                <input className="input" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
+              </div>
+              <div className="form-row" style={{ flex: '0 0 160px' }}>
+                <label>Рейтинг задания (1–5)</label>
+                <select className="select" value={Number(form.rating) || 1} onChange={e => setForm({ ...form, rating: Number(e.target.value) })}>
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={3}>3</option>
+                  <option value={4}>4</option>
+                  <option value={5}>5</option>
+                </select>
+              </div>
             </div>
             <div className="form-row full-row">
               <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -993,9 +1031,12 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
         ) : null}
       </div>
 
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="row" style={{ marginTop: 12, gap: 8 }}>
         {view === 'add' && selectedLessonId ? (
-          <button className="btn" onClick={createTask}>Создать</button>
+          <>
+            <button className="btn" onClick={createTask}>Создать</button>
+            <button className="btn" onClick={() => setShowBulk(true)}>Добавить много (JSON)</button>
+          </>
         ) : selectedId ? (
           <div style={{ display: 'flex', gap: '10px' }}>
             <button className="btn" onClick={updateTask}>Сохранить изменения</button>
@@ -1003,6 +1044,22 @@ export default function TasksTab({ view, initialSelectedLessonId }: { view: 'add
           </div>
         ) : null}
       </div>
+      {bulkMsg && (
+        <div style={{ position: 'fixed', top: 20, right: 20, background: '#28a745', color: '#fff', padding: '10px 16px', borderRadius: 6, zIndex: 1100 }} onClick={() => setBulkMsg('')}>{bulkMsg}</div>
+      )}
+      {showBulk && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#1e1e1e', padding: 20, borderRadius: 8, width: '80%', maxWidth: 700 }}>
+            <h3>Добавить много заданий (JSON)</h3>
+            <p style={{ fontSize: 12, color: '#aaa' }}>{'Формат: массив объектов [{"title":"...","description":"...","kind":"quiz|code|text","test_spec":{...},"rating":1}]'}</p>
+            <textarea className="textarea" rows={12} value={bulkJson} onChange={e => setBulkJson(e.target.value)} />
+            <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+              <button className="btn" onClick={bulkCreate}>Добавить</button>
+              <button className="btn" onClick={() => setShowBulk(false)}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

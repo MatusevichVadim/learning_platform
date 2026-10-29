@@ -66,6 +66,18 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
     }
   }
 
+  async function downloadTasks(lessonId: number) {
+    const res = await axios.get('/api/admin/tasks', { headers: authHeaders() })
+    const tasks = res.data.filter((t: any) => t.lesson_id === lessonId)
+    const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `lesson_${lessonId}_tasks.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function startEditTitle(lesson: { id: number; title: string }) {
     setEditingLessonId(lesson.id)
     setEditingLessonTitle(lesson.title)
@@ -466,6 +478,22 @@ export default function LessonsTab({ onSelectLesson }: { onSelectLesson?: (id: n
                     title="Переместить вниз"
                   >
                     ↓
+                  </button>
+                  <button
+                    className="btn small"
+                    onClick={() => downloadTasks(l.id)}
+                    style={{
+                      backgroundColor: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                    title="Скачать задания (JSON)"
+                  >
+                    ⬇️
                   </button>
                   <button
                     className="btn small"

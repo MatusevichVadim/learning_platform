@@ -32,11 +32,13 @@ export default function UsersTab() {
   const [deleteUserId, setDeleteUserId] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [langToast, setLangToast] = useState('')
   const [languages, setLanguages] = useState<Language[]>([])
   const [languageModalUser, setLanguageModalUser] = useState<User | null>(null)
   const [selectedLanguageIds, setSelectedLanguageIds] = useState<string[]>([])
   const [selectedLanguageId, setSelectedLanguageId] = useState('')
   const [languageSaveLoading, setLanguageSaveLoading] = useState(false)
+  useEffect(() => { if (langToast) { const t = setTimeout(() => setLangToast(''), 2000); return () => clearTimeout(t) } }, [langToast])
 
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('created_at')
@@ -143,7 +145,7 @@ export default function UsersTab() {
       await adminSetUserLanguages(languageModalUser.id, nextLanguageIds)
       setSelectedLanguageIds(nextLanguageIds)
       setSelectedLanguageId('')
-      setMessage('Язык назначен')
+      setLangToast('Язык назначен')
       loadUsers()
     } catch (err: any) {
       setMessage(err.response?.data?.detail || 'Ошибка назначения языка')
@@ -160,7 +162,7 @@ export default function UsersTab() {
       const nextLanguageIds = selectedLanguageIds.filter(id => id !== languageId)
       await adminSetUserLanguages(languageModalUser.id, nextLanguageIds)
       setSelectedLanguageIds(nextLanguageIds)
-      setMessage('Язык отозван')
+      setLangToast('Язык отозван')
       loadUsers()
     } catch (err: any) {
       setMessage(err.response?.data?.detail || 'Ошибка отзыва языка')
@@ -600,6 +602,11 @@ export default function UsersTab() {
               </table>
             </div>
           </div>
+        </div>
+      )}
+      {langToast && (
+        <div style={{ position: 'fixed', top: 10, right: 10, backgroundColor: '#4caf50', color: 'white', padding: '8px 16px', borderRadius: 4, zIndex: 1000 }}>
+          {langToast}
         </div>
       )}
     </div>
